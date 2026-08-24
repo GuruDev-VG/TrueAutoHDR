@@ -33,7 +33,7 @@ public sealed class AppUpdateService
     {
         _appData = appData;
         _logger = logger;
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("TrueAutoHDR/1.2.3");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("TrueAutoHDR/1.2.4");
     }
 
     public async Task<AppUpdateInfo> CheckAsync(AppUpdateChannel channel, string manifestUrl, CancellationToken ct = default)
@@ -48,9 +48,8 @@ public sealed class AppUpdateService
             var json = await _http.GetStringAsync(uri, ct);
             var manifest = JsonSerializer.Deserialize<UpdateManifest>(json,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (manifest is null || string.IsNullOrWhiteSpace(manifest.Version) ||
-                string.IsNullOrWhiteSpace(manifest.PackageUrl) || string.IsNullOrWhiteSpace(manifest.Sha256))
-                return new(false, false, "Update manifest is missing required fields.");
+            if (manifest is null || string.IsNullOrWhiteSpace(manifest.Version))
+                return new(false, false, "Update manifest is missing its version.");
 
             if (!Version.TryParse(manifest.Version, out var remote))
                 return new(false, false, $"Invalid update version '{manifest.Version}'.");
@@ -61,8 +60,20 @@ public sealed class AppUpdateService
                 ? (channel == AppUpdateChannel.Canary ? "Canary" : "Stable")
                 : manifest.ReleaseType.Trim();
 
-            return new(true, available,
-                available ? $"{type} {remote} is available." : $"You already have the latest {channel} build.",
+            // The repository may intentionally publish a "nothing newer yet"
+            // manifest without a package URL/hash. Only require package fields
+            // when the manifest actually advertises a newer build.
+            if (!available)
+                return new(true, false, $"You already have the latest {channel} build.",
+                    remote.ToString(), type, manifest.Notes ?? "", "", "", manifest.MinimumVersion);
+
+            if (string.IsNullOrWhiteSpace(manifest.PackageUrl) ||
+                string.IsNullOrWhiteSpace(manifest.Sha256))
+                return new(false, false,
+                    $"{type} {remote} is newer, but its update package is not published correctly yet.");
+
+            return new(true, true,
+                $"{type} {remote} is available.",
                 remote.ToString(), type, manifest.Notes ?? "", manifest.PackageUrl.Trim(),
                 NormalizeHash(manifest.Sha256), manifest.MinimumVersion);
         }

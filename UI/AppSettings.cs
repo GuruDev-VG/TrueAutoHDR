@@ -13,16 +13,19 @@ public enum AppTheme
 
 public sealed class AppSettings
 {
+    public const string DefaultStableUpdateManifestUrl = "https://raw.githubusercontent.com/GuruDev-VG/TrueAutoHDR/main/update/stable.json";
+    public const string DefaultCanaryUpdateManifestUrl = "https://raw.githubusercontent.com/GuruDev-VG/TrueAutoHDR/main/update/canary.json";
+    public const string DefaultDatabaseManifestUrl = "https://raw.githubusercontent.com/GuruDev-VG/TrueAutoHDR/main/update/database.json";
     private readonly string _path;
     private readonly FileLogger _logger;
 
     public AppTheme Theme { get; private set; } = AppTheme.System;
     public bool RunAtStartup { get; private set; }
-    public string DatabaseManifestUrl { get; private set; } = "";
+    public string DatabaseManifestUrl { get; private set; } = DefaultDatabaseManifestUrl;
     public bool OnboardingCompleted { get; private set; }
     public AppUpdateChannel UpdateChannel { get; private set; } = AppUpdateChannel.Stable;
-    public string StableUpdateManifestUrl { get; private set; } = "";
-    public string CanaryUpdateManifestUrl { get; private set; } = "";
+    public string StableUpdateManifestUrl { get; private set; } = DefaultStableUpdateManifestUrl;
+    public string CanaryUpdateManifestUrl { get; private set; } = DefaultCanaryUpdateManifestUrl;
     public event Action<AppTheme>? ThemeChanged;
     public event Action<bool>? RunAtStartupChanged;
     public event Action<string>? DatabaseManifestUrlChanged;
@@ -103,12 +106,18 @@ public sealed class AppSettings
                 if (Enum.TryParse<AppTheme>(data.Theme, true, out var parsed))
                     Theme = parsed;
                 RunAtStartup = data.RunAtStartup;
-                DatabaseManifestUrl = data.DatabaseManifestUrl ?? "";
+                DatabaseManifestUrl = string.IsNullOrWhiteSpace(data.DatabaseManifestUrl)
+                    ? DefaultDatabaseManifestUrl
+                    : data.DatabaseManifestUrl.Trim();
                 OnboardingCompleted = data.OnboardingCompleted;
                 if (Enum.TryParse<AppUpdateChannel>(data.UpdateChannel, true, out var updateChannel))
                     UpdateChannel = updateChannel;
-                StableUpdateManifestUrl = data.StableUpdateManifestUrl ?? "";
-                CanaryUpdateManifestUrl = data.CanaryUpdateManifestUrl ?? "";
+                StableUpdateManifestUrl = string.IsNullOrWhiteSpace(data.StableUpdateManifestUrl)
+                    ? DefaultStableUpdateManifestUrl
+                    : data.StableUpdateManifestUrl.Trim();
+                CanaryUpdateManifestUrl = string.IsNullOrWhiteSpace(data.CanaryUpdateManifestUrl)
+                    ? DefaultCanaryUpdateManifestUrl
+                    : data.CanaryUpdateManifestUrl.Trim();
             }
         }
         catch (Exception ex)
@@ -144,10 +153,10 @@ public sealed class AppSettings
     {
         public string Theme { get; set; } = "System";
         public bool RunAtStartup { get; set; }
-        public string DatabaseManifestUrl { get; set; } = "";
+        public string DatabaseManifestUrl { get; set; } = DefaultDatabaseManifestUrl;
         public bool OnboardingCompleted { get; set; }
         public string UpdateChannel { get; set; } = "Stable";
-        public string StableUpdateManifestUrl { get; set; } = "";
-        public string CanaryUpdateManifestUrl { get; set; } = "";
+        public string StableUpdateManifestUrl { get; set; } = DefaultStableUpdateManifestUrl;
+        public string CanaryUpdateManifestUrl { get; set; } = DefaultCanaryUpdateManifestUrl;
     }
 }

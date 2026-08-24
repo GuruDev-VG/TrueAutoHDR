@@ -68,7 +68,7 @@ internal static class Program
         Directory.CreateDirectory(appData);
 
         var logger = new FileLogger(Path.Combine(appData, "trueautohdr.log"));
-        logger.Log($"TrueAuto HDR v1.2.3 starting. mode={(portableMode ? "portable" : "installed")}, startup={startupMode}.");
+        logger.Log($"TrueAuto HDR v1.2.4 starting. mode={(portableMode ? "portable" : "installed")}, startup={startupMode}.");
 
         Application.ThreadException += (_, e) =>
             ReportFatalError(logger, "WinForms UI exception", e.Exception);

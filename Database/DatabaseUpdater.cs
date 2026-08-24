@@ -29,7 +29,7 @@ public sealed class DatabaseUpdater
         _versionPath = versionPath;
         _logger = logger;
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("TrueAutoHDR", "1.1.4"));
+        _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("TrueAutoHDR", "1.2.4"));
     }
 
     public string CurrentVersion
@@ -54,11 +54,21 @@ public sealed class DatabaseUpdater
             var manifest = JsonSerializer.Deserialize<Manifest>(manifestJson,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-            if (manifest is null || string.IsNullOrWhiteSpace(manifest.Version) ||
-                !Uri.TryCreate(manifest.DatabaseUrl, UriKind.Absolute, out var dbUri))
+            if (manifest is null || string.IsNullOrWhiteSpace(manifest.Version))
                 return new(false, false, "The database manifest is invalid.");
 
             var current = CurrentVersion;
+
+            // A live manifest with no databaseUrl means the maintained database
+            // channel exists, but no standalone database package has been
+            // published yet. PCGamingWiki verification can still run normally.
+            if (string.IsNullOrWhiteSpace(manifest.DatabaseUrl))
+                return new(true, false,
+                    $"No separate TrueAuto HDR database package is published yet (manifest {manifest.Version}).",
+                    manifest.Version.Trim());
+
+            if (!Uri.TryCreate(manifest.DatabaseUrl, UriKind.Absolute, out var dbUri))
+                return new(false, false, "The database manifest contains an invalid database URL.");
             if (string.Equals(current, manifest.Version.Trim(), StringComparison.OrdinalIgnoreCase))
                 return new(true, false, $"HDR database is already up to date ({current}).", current);
 

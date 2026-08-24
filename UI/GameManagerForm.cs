@@ -50,7 +50,7 @@ public sealed class GameManagerForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
 
-        Text = "TrueAuto HDR 1.2.3 — Game Manager";
+        Text = "TrueAuto HDR 1.2.4 — Game Manager";
         Icon = AppIcon.Create();
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(1040, 700);

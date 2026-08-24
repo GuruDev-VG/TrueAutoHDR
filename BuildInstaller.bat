@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title TrueAuto HDR 1.2.3 - Installer Builder
+title TrueAuto HDR 1.2.4 - Installer Builder
 
 where dotnet >nul 2>nul
 if errorlevel 1 (
@@ -62,7 +62,7 @@ if errorlevel 1 goto :failed
 
 echo.
 echo Installer complete:
-echo   %~dp0release\Installer\TrueAutoHDR-1.2.3-Setup.exe
+echo   %~dp0release\Installer\TrueAutoHDR-1.2.4-Setup.exe
 if not defined TRUEAUTOHDR_NO_PAUSE pause
 exit /b 0
 
