@@ -1,7 +1,7 @@
-{
-  "version": "1.2.3",
-  "releaseType": "Stable",
-  "packageUrl": "",
-  "sha256": "",
-  "notes": "TrueAuto HDR stable update channel. No in-app update package is published for 1.2.3."
+﻿{
+    "version":  "1.2.5",
+    "releaseType":  "Hotfix",
+    "packageUrl":  "https://github.com/GuruDev-VG/TrueAutoHDR/releases/download/v1.2.5/TrueAutoHDR-update-1.2.5.zip",
+    "sha256":  "7c29f2b60c20167917954a87da5573719c284e9c93ac9d9fb53cd2024bc1a243",
+    "notes":  "Stable updater pipeline test. No functional changes beyond version 1.2.5 and a startup log marker."
 }
