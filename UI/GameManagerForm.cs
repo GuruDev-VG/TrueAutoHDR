@@ -50,6 +50,15 @@ public sealed class GameManagerForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
 
+        // WinForms/native child controls can still paint one default system-color
+        // frame while their HWNDs are being created. Build that first frame fully
+        // transparent, then reveal the finished themed form on the next UI cycle.
+        Opacity = 0d;
+        DoubleBuffered = true;
+        SetStyle(ControlStyles.AllPaintingInWmPaint |
+                 ControlStyles.OptimizedDoubleBuffer, true);
+        UpdateStyles();
+
         Text = "TrueAuto HDR 1.2.6 — Game Manager";
         Icon = AppIcon.Create();
         StartPosition = FormStartPosition.CenterScreen;
@@ -278,6 +287,27 @@ public sealed class GameManagerForm : Form
         Shown += async (_, _) =>
         {
             _logger.Log($"Game Manager shown: DeviceDpi={DeviceDpi}, AutoScaleMode={AutoScaleMode}, ClientSize={ClientSize.Width}x{ClientSize.Height}.");
+
+            // Shown occurs after the native window exists, but the form is still
+            // completely transparent. Give WinForms one UI turn to finish child
+            // HWND creation/DPI layout/theme painting, then reveal the completed
+            // frame. This prevents default-white child-control flashes.
+            ThemeManager.Apply(this, _settings.Theme);
+            PerformLayout();
+            Invalidate(true);
+
+            BeginInvoke(new Action(() =>
+            {
+                if (IsDisposed) return;
+
+                ThemeManager.ApplyWindowChrome(this, _settings.Theme);
+                PerformLayout();
+                Invalidate(true);
+                Update();
+                Opacity = 1d;
+                _logger.Log("Game Manager first-frame reveal completed.");
+            }));
+
             _scanStatus.Text = "Loading installed games…";
             _scanProgress.StartIndeterminate();
             _grid.Enabled = false;
