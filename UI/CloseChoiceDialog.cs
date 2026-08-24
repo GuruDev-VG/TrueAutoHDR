@@ -22,7 +22,7 @@ public sealed class CloseChoiceDialog : Form
         MaximizeBox = false;
         MinimizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(470, 220);
+        ClientSize = new Size(470, 258);
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 9F);
 
@@ -77,22 +77,43 @@ public sealed class CloseChoiceDialog : Form
             DialogResult = DialogResult.Cancel
         };
 
-        var buttons = new FlowLayoutPanel
+        var choiceButtons = new TableLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 2,
+            RowCount = 1,
+            Anchor = AnchorStyles.None,
+            Tag = "content",
+            Margin = new Padding(0)
+        };
+        choiceButtons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        choiceButtons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        keep.Margin = new Padding(0, 0, 8, 0);
+        exit.Margin = new Padding(8, 0, 0, 0);
+        choiceButtons.Controls.Add(keep, 0, 0);
+        choiceButtons.Controls.Add(exit, 1, 0);
+
+        var cancelRow = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            Tag = "content"
+            ColumnCount = 3,
+            RowCount = 1,
+            Tag = "content",
+            Margin = new Padding(0)
         };
-        buttons.Controls.Add(exit);
-        buttons.Controls.Add(keep);
-        buttons.Controls.Add(cancel);
+        cancelRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        cancelRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        cancelRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        cancel.Anchor = AnchorStyles.None;
+        cancel.Margin = new Padding(0);
+        cancelRow.Controls.Add(cancel, 1, 0);
 
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 5,
+            RowCount = 6,
             Padding = new Padding(20),
             Tag = "content"
         };
@@ -101,10 +122,12 @@ public sealed class CloseChoiceDialog : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         layout.Controls.Add(title, 0, 0);
         layout.Controls.Add(message, 0, 1);
         layout.Controls.Add(_remember, 0, 2);
-        layout.Controls.Add(buttons, 0, 4);
+        layout.Controls.Add(choiceButtons, 0, 4);
+        layout.Controls.Add(cancelRow, 0, 5);
 
         Controls.Add(layout);
         CancelButton = cancel;
