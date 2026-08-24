@@ -23,7 +23,7 @@ PCGamingWiki entries tagged **Native support**, **Limited native support**, or *
 ## Features
 
 - Automatic HDR switching for native-HDR games
-- Main-monitor-only HDR control
+- Windows Main Display by default, with optional per-game display overrides
 - Steam and additional storefront/game detection
 - PCGamingWiki HDR-list verification
 - Local HDR database and manual game management
@@ -67,7 +67,9 @@ For the complete release:
 BuildRelease.bat
 ```
 
-The release pipeline builds the updater and application, verifies required payload files, runs the built-in `--self-test`, and only then packages the portable and installer versions.
+The release pipeline builds the updater and application, optionally Authenticode-signs release executables when signing is configured, verifies required payload files, runs the built-in `--self-test`, packages Portable/Installer builds, and generates `release/SHA256SUMS.txt`.
+
+See [SIGNING.md](SIGNING.md) for the optional signing setup.
 
 ## AI-assisted development
 
@@ -84,6 +86,22 @@ Constructive bug reports, technical criticism, testing, and contributions are we
 TrueAuto HDR can consult PCGamingWiki's community-maintained HDR information to help determine whether an installed game supports native HDR.
 
 PCGamingWiki is an independent project and is not affiliated with TrueAuto HDR or VG Prod. Please support and contribute corrections to PCGamingWiki when you find inaccurate game information.
+
+
+## Antivirus detections and release verification
+
+TrueAuto HDR performs several operations that can attract heuristic antivirus attention: it watches for game processes, changes Windows HDR state, downloads verified updates, and uses a separate updater that replaces application files before restarting the program.
+
+Generic detections such as `IDP.Generic`, `Malware-gen`, `Generic`, or `Heur` do not identify one specific malware family. However, an antivirus warning should still be treated seriously rather than automatically ignored.
+
+For official releases:
+
+- download only from this repository's GitHub Releases page;
+- verify the release file against the published `SHA256SUMS.txt`;
+- do not disable or whitelist your antivirus solely because a detection is believed to be a false positive;
+- report unexpected detections so the exact build can be reviewed and submitted to the antivirus vendor if appropriate.
+
+See [ANTIVIRUS.md](ANTIVIRUS.md) for verification and reporting details.
 
 ## Privacy
 

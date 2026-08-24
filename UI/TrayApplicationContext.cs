@@ -59,7 +59,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         ThemeManager.Apply(_menu, _settings.Theme);
 
         _trayIcon = AppIcon.Create();
-        _tray = new NotifyIcon { Icon = _trayIcon, Text = "TrueAuto HDR 1.3.0", Visible = true, ContextMenuStrip = _menu };
+        _tray = new NotifyIcon { Icon = _trayIcon, Text = "TrueAuto HDR 1.3.1", Visible = true, ContextMenuStrip = _menu };
         _tray.DoubleClick += (_, _) => ShowManager();
         watcher.StatusChanged += text => RunOnUi(() => _statusItem.Text = text);
         watcher.Start(startupMode);

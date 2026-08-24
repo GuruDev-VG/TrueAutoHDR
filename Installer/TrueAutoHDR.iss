@@ -1,5 +1,5 @@
 #define MyAppName "TrueAuto HDR"
-#define MyAppVersion "1.3.0"
+#define MyAppVersion "1.3.1"
 #define MyAppPublisher "VG Prod."
 #define MyAppExeName "TrueAutoHDR.exe"
 
@@ -15,7 +15,7 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\release\Installer
-OutputBaseFilename=TrueAutoHDR-1.3.0-Setup
+OutputBaseFilename=TrueAutoHDR-1.3.1-Setup
 SetupIconFile=..\Assets\AutoHDR.ico
 UninstallDisplayIcon={app}\TrueAutoHDR.exe
 Compression=lzma2
@@ -27,10 +27,10 @@ CloseApplications=yes
 RestartApplications=no
 AppMutex=Local\TrueAutoHDR_SingleInstance
 ChangesAssociations=no
-VersionInfoVersion=1.3.0.0
+VersionInfoVersion=1.3.1.0
 VersionInfoDescription=TrueAuto HDR Setup
 VersionInfoProductName=TrueAuto HDR
-VersionInfoProductVersion=1.3.0
+VersionInfoProductVersion=1.3.1
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

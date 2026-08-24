@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.1 — Release trust and verification
+
+- Added automatic SHA-256 release hash generation.
+- Added SHA-256 sidecar generation for in-app update packages.
+- Added optional Authenticode signing hooks without storing signing credentials in the repository.
+- Added antivirus/false-positive documentation and reporting guidance.
+- Expanded release checklist with artifact verification and AV checks.
+- No new runtime polling or background resource usage.
+
+
 ## 1.3.0 — Automation and reliability
 
 - Added per-game HDR timing/exit/display rules.

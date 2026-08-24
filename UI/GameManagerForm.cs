@@ -65,7 +65,7 @@ public sealed class GameManagerForm : Form
                  ControlStyles.OptimizedDoubleBuffer, true);
         UpdateStyles();
 
-        Text = "TrueAuto HDR 1.3.0 — Game Manager";
+        Text = "TrueAuto HDR 1.3.1 — Game Manager";
         Icon = AppIcon.Create();
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(1040, 700);

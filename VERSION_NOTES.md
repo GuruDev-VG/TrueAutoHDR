@@ -1,13 +1,12 @@
 # Version baseline
 
-This repository tree is the definitive **TrueAuto HDR 1.3.0** source.
+This repository tree is the definitive **TrueAuto HDR 1.3.1** source.
 
-Key 1.3.0 additions:
-- per-game HDR enable delay / exit grace / keep-HDR rules
-- per-game display override
-- independent per-display HDR session state
-- on-demand diagnostics
-- application update backups and manual rollback
-- production-friendly `BuildUpdatePackage.bat`
+1.3.1 adds release-trust infrastructure:
+- SHA-256 verification files for public release artifacts
+- SHA-256 sidecar for in-app update packages
+- optional Authenticode signing hooks
+- antivirus / false-positive documentation and reporting guidance
+- expanded release integrity checklist
 
-All new runtime behavior is event-driven or on-demand; no additional idle polling loops were introduced.
+Runtime HDR automation remains based on the 1.3.0 feature set. These changes add no new background polling or idle resource usage.

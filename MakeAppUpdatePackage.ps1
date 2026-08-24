@@ -1,7 +1,7 @@
 param(
     [string]$RepoOwner = "GuruDev-VG",
     [string]$RepoName = "TrueAutoHDR",
-    [string]$Version = "1.3.0"
+    [string]$Version = "1.3.1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -121,7 +121,12 @@ try {
     }
 
     Write-Host ""
-    Write-Host "[4/6] Running built-in self-test..."
+    Write-Host "[4/7] Optional code signing..."
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "SignRelease.ps1") -Path $payload
+    if ($LASTEXITCODE -ne 0) { Stop-WithError "Code signing step failed." }
+
+    Write-Host ""
+    Write-Host "[5/7] Running built-in self-test..."
     $selfTest = Start-Process `
         -FilePath $mainExe `
         -ArgumentList "--self-test" `
@@ -136,7 +141,7 @@ try {
     Write-Host "Self-test passed."
 
     Write-Host ""
-    Write-Host "[5/6] Creating update ZIP..."
+    Write-Host "[6/7] Creating update ZIP..."
     $zipName = "TrueAutoHDR-update-$Version.zip"
     $zipPath = Join-Path $out $zipName
 
@@ -155,8 +160,10 @@ try {
     }
 
     Write-Host ""
-    Write-Host "[6/6] Creating GitHub Stable manifest..."
+    Write-Host "[7/7] Creating GitHub Stable manifest..."
     $sha256 = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $shaPath = Join-Path $out "$zipName.sha256"
+    "$sha256  $zipName" | Set-Content -Path $shaPath -Encoding ASCII
     $tag = "v$Version"
     $packageUrl = "https://github.com/$RepoOwner/$RepoName/releases/download/$tag/$zipName"
 
@@ -165,7 +172,7 @@ try {
         releaseType = "Stable"
         packageUrl = $packageUrl
         sha256 = $sha256
-        notes = "TrueAuto HDR 1.3.0: per-game rules, display overrides, diagnostics, and update rollback."
+        notes = "TrueAuto HDR 1.3.1: per-game rules, display overrides, diagnostics, and update rollback."
     }
 
     $manifestPath = Join-Path $out "stable.json"

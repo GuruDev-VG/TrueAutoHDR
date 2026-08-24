@@ -48,7 +48,7 @@ public sealed class AppUpdateService
         {
             Timeout = TimeSpan.FromMinutes(3)
         };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("TrueAutoHDR/1.3.0");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("TrueAutoHDR/1.3.1");
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json", 0.8));
     }
@@ -303,7 +303,7 @@ public sealed class AppUpdateService
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-            request.Headers.UserAgent.ParseAdd("TrueAutoHDR/1.3.0");
+            request.Headers.UserAgent.ParseAdd("TrueAutoHDR/1.3.1");
             request.Headers.Accept.Clear();
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(
                 githubApiAsset ? "application/octet-stream" : "*/*"));
@@ -387,7 +387,7 @@ public sealed class AppUpdateService
                 $"{Uri.EscapeDataString(repo)}/releases/tags/{Uri.EscapeDataString(tag)}");
 
             using var request = new HttpRequestMessage(HttpMethod.Get, api);
-            request.Headers.UserAgent.ParseAdd("TrueAutoHDR/1.3.0");
+            request.Headers.UserAgent.ParseAdd("TrueAutoHDR/1.3.1");
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
             request.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", "2022-11-28");
 

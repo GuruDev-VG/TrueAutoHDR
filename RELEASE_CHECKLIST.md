@@ -1,4 +1,4 @@
-# TrueAuto HDR 1.0 — Release / Regression Checklist
+# TrueAuto HDR — Release / Regression Checklist
 
 This checklist is intended for the final Windows build machine.
 
@@ -11,6 +11,18 @@ This checklist is intended for the final Windows build machine.
 - [ ] Installer output is `release\Installer\TrueAutoHDR-1.0.0-Setup.exe`.
 - [ ] Installed app appears in Windows Installed apps / Add or remove programs.
 - [ ] Uninstaller launches successfully.
+
+
+## Release trust / antivirus
+
+- [ ] `BuildRelease.bat` produces `release\SHA256SUMS.txt`.
+- [ ] SHA-256 values in `SHA256SUMS.txt` match the exact uploaded Installer and Portable files.
+- [ ] `BuildUpdatePackage.bat` produces the update ZIP, its `.sha256` file, and `stable.json`.
+- [ ] The SHA-256 in `stable.json` matches the exact uploaded update ZIP.
+- [ ] If code signing is configured, signatures on `TrueAutoHDR.exe`, `TrueAutoHDR.Updater.exe`, and the installer verify successfully.
+- [ ] Scan the exact final release artifacts with the normal release-machine antivirus before publishing.
+- [ ] If a generic/heuristic detection appears, record the engine, detection name, filename, and SHA-256 before submitting a false-positive report.
+- [ ] Never recommend that users globally disable antivirus protection.
 
 ## First run / onboarding
 
