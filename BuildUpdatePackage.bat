@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title TrueAuto HDR 1.3.1 - App Update Package
+title TrueAuto HDR 1.3.2 - App Update Package
 
 echo ========================================
-echo TrueAuto HDR 1.3.1 App Update Package
+echo TrueAuto HDR 1.3.2 App Update Package
 echo ========================================
 echo.
 

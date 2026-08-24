@@ -1,7 +1,7 @@
 param(
     [string]$RepoOwner = "GuruDev-VG",
     [string]$RepoName = "TrueAutoHDR",
-    [string]$Version = "1.3.1"
+    [string]$Version = "1.3.2"
 )
 
 $ErrorActionPreference = "Stop"
@@ -172,7 +172,7 @@ try {
         releaseType = "Stable"
         packageUrl = $packageUrl
         sha256 = $sha256
-        notes = "TrueAuto HDR 1.3.1: per-game rules, display overrides, diagnostics, and update rollback."
+        notes = "TrueAuto HDR 1.3.2: close-window choice dialog with optional remembered behavior."
     }
 
     $manifestPath = Join-Path $out "stable.json"

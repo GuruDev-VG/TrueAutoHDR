@@ -19,6 +19,7 @@ public sealed class SettingsForm : Form
     private readonly Button _rollbackUpdate = new();
     private readonly ComboBox _themeCombo = new();
     private readonly CheckBox _startupToggle = new();
+    private readonly ComboBox _closeBehavior = new();
     private readonly TextBox _databaseUrl = new();
     private readonly Label _databaseVersion = new();
     private readonly Button _checkDatabase = new();
@@ -43,7 +44,7 @@ public sealed class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(640, 570);
+        ClientSize = new Size(640, 610);
 
         var title = new Label
         {
@@ -76,6 +77,31 @@ public sealed class SettingsForm : Form
             AutoSize = true,
             MaximumSize = new Size(535, 0),
             Tag = "muted"
+        };
+
+        _closeBehavior.DropDownStyle = ComboBoxStyle.DropDownList;
+        _closeBehavior.Dock = DockStyle.Fill;
+        _closeBehavior.Items.AddRange(new object[]
+        {
+            "Ask every time",
+            "Keep running in background",
+            "Exit application"
+        });
+        _closeBehavior.SelectedIndex = _settings.CloseBehavior switch
+        {
+            WindowCloseBehavior.KeepRunning => 1,
+            WindowCloseBehavior.ExitApplication => 2,
+            _ => 0
+        };
+        _closeBehavior.SelectedIndexChanged += (_, _) =>
+        {
+            if (_syncing) return;
+            _settings.SetCloseBehavior(_closeBehavior.SelectedIndex switch
+            {
+                1 => WindowCloseBehavior.KeepRunning,
+                2 => WindowCloseBehavior.ExitApplication,
+                _ => WindowCloseBehavior.Ask
+            });
         };
 
         var appUpdateTitle = new Label
@@ -172,27 +198,29 @@ public sealed class SettingsForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 16,
+            RowCount = 17,
             Padding = new Padding(18, 14, 18, 14)
         };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var i = 0; i < 15; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, i is 3 or 6 or 13 ? 48 : 32));
+        for (var i = 0; i < 16; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, i is 3 or 7 or 14 ? 48 : 32));
         grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         grid.Controls.Add(title, 0, 0); grid.SetColumnSpan(title, 2);
         grid.Controls.Add(themeLabel, 0, 1); grid.Controls.Add(_themeCombo, 1, 1);
         grid.Controls.Add(_startupToggle, 0, 2); grid.SetColumnSpan(_startupToggle, 2);
         grid.Controls.Add(startupHint, 0, 3); grid.SetColumnSpan(startupHint, 2);
+        grid.Controls.Add(new Label { Text = "Closing X", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 4);
+        grid.Controls.Add(_closeBehavior, 1, 4);
 
-        grid.Controls.Add(appUpdateTitle, 0, 4); grid.SetColumnSpan(appUpdateTitle, 2);
-        grid.Controls.Add(appUpdateHint, 0, 5); grid.SetColumnSpan(appUpdateHint, 2);
-        grid.Controls.Add(new Label { Text = "Update channel", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 6);
-        grid.Controls.Add(_updateChannel, 1, 6);
-        grid.Controls.Add(new Label { Text = "Stable manifest", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 7);
-        grid.Controls.Add(_stableUpdateUrl, 1, 7);
-        grid.Controls.Add(new Label { Text = "Canary manifest", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 8);
-        grid.Controls.Add(_canaryUpdateUrl, 1, 8);
+        grid.Controls.Add(appUpdateTitle, 0, 5); grid.SetColumnSpan(appUpdateTitle, 2);
+        grid.Controls.Add(appUpdateHint, 0, 6); grid.SetColumnSpan(appUpdateHint, 2);
+        grid.Controls.Add(new Label { Text = "Update channel", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 7);
+        grid.Controls.Add(_updateChannel, 1, 7);
+        grid.Controls.Add(new Label { Text = "Stable manifest", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 8);
+        grid.Controls.Add(_stableUpdateUrl, 1, 8);
+        grid.Controls.Add(new Label { Text = "Canary manifest", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 9);
+        grid.Controls.Add(_canaryUpdateUrl, 1, 9);
         var updateButtons = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -202,15 +230,15 @@ public sealed class SettingsForm : Form
         };
         updateButtons.Controls.Add(_checkAppUpdate);
         updateButtons.Controls.Add(_rollbackUpdate);
-        grid.Controls.Add(updateButtons, 1, 9);
+        grid.Controls.Add(updateButtons, 1, 10);
 
-        grid.Controls.Add(dbTitle, 0, 10); grid.SetColumnSpan(dbTitle, 2);
-        grid.Controls.Add(dbHint, 0, 11); grid.SetColumnSpan(dbHint, 2);
-        grid.Controls.Add(new Label { Text = "HDR DB manifest", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 12);
-        grid.Controls.Add(_databaseUrl, 1, 12);
-        grid.Controls.Add(_databaseVersion, 0, 13);
-        grid.Controls.Add(_checkDatabase, 1, 13);
-        grid.Controls.Add(close, 1, 15);
+        grid.Controls.Add(dbTitle, 0, 11); grid.SetColumnSpan(dbTitle, 2);
+        grid.Controls.Add(dbHint, 0, 12); grid.SetColumnSpan(dbHint, 2);
+        grid.Controls.Add(new Label { Text = "HDR DB manifest", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 13);
+        grid.Controls.Add(_databaseUrl, 1, 13);
+        grid.Controls.Add(_databaseVersion, 0, 14);
+        grid.Controls.Add(_checkDatabase, 1, 14);
+        grid.Controls.Add(close, 1, 16);
         Controls.Add(grid);
 
         AcceptButton = close;

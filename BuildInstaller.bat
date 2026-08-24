@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title TrueAuto HDR 1.3.1 - Installer Builder
+title TrueAuto HDR 1.3.2 - Installer Builder
 
 where dotnet >nul 2>nul
 if errorlevel 1 (
@@ -65,12 +65,12 @@ echo [7/8] Compiling installer...
 if errorlevel 1 goto :failed
 
 echo [8/8] Optional code signing of installer...
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0SignRelease.ps1" -Path "%~dp0release\Installer\TrueAutoHDR-1.3.1-Setup.exe"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0SignRelease.ps1" -Path "%~dp0release\Installer\TrueAutoHDR-1.3.2-Setup.exe"
 if errorlevel 1 goto :failed
 
 echo.
 echo Installer complete:
-echo   %~dp0release\Installer\TrueAutoHDR-1.3.1-Setup.exe
+echo   %~dp0release\Installer\TrueAutoHDR-1.3.2-Setup.exe
 if not defined TRUEAUTOHDR_NO_PAUSE pause
 exit /b 0
 

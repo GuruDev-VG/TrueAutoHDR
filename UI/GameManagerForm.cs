@@ -32,6 +32,7 @@ public sealed class GameManagerForm : Form
     private readonly Dictionary<string, string> _sourceHints = new(StringComparer.OrdinalIgnoreCase);
 
     public event Action? DatabaseChanged;
+    public event Action? ExitRequested;
 
     public GameManagerForm(UnifiedGameDetector games, HdrDatabase database, CommunityHdrSources community, SteamStoreHdrClient steamStore, PcgwHdrListClient pcgwHdr, DatabaseUpdater databaseUpdater, HdrSourcesUpdater hdrSourcesUpdater, AppUpdateService appUpdates, GameRuleStore rules, DiagnosticsService diagnostics, FileLogger logger, AppSettings settings, StartupManager startup)
     {
@@ -65,7 +66,7 @@ public sealed class GameManagerForm : Form
                  ControlStyles.OptimizedDoubleBuffer, true);
         UpdateStyles();
 
-        Text = "TrueAuto HDR 1.3.1 — Game Manager";
+        Text = "TrueAuto HDR 1.3.2 — Game Manager";
         Icon = AppIcon.Create();
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(1040, 700);
@@ -286,6 +287,8 @@ public sealed class GameManagerForm : Form
 
         _settings.ThemeChanged += OnThemeChanged;
         _settings.RunAtStartupChanged += OnRunAtStartupChanged;
+        FormClosing += OnManagerFormClosing;
+
         FormClosed += (_, _) =>
         {
             _settings.ThemeChanged -= OnThemeChanged;
@@ -338,6 +341,63 @@ public sealed class GameManagerForm : Form
                 _grid.Enabled = true;
             }
         };
+    }
+
+    private void OnManagerFormClosing(object? sender, FormClosingEventArgs e)
+    {
+        // Only intercept an actual user click on the window close button.
+        // Application shutdown, updater shutdown, Windows logoff, etc. must
+        // continue without prompting or blocking termination.
+        if (e.CloseReason != CloseReason.UserClosing)
+            return;
+
+        var behavior = _settings.CloseBehavior;
+
+        if (behavior == WindowCloseBehavior.KeepRunning)
+        {
+            e.Cancel = true;
+            Hide();
+            _logger.Log("Game Manager closed to tray using remembered close behavior.");
+            return;
+        }
+
+        if (behavior == WindowCloseBehavior.ExitApplication)
+        {
+            e.Cancel = true;
+            _logger.Log("Game Manager requested full application exit using remembered close behavior.");
+            BeginInvoke(new Action(() => ExitRequested?.Invoke()));
+            return;
+        }
+
+        using var dialog = new CloseChoiceDialog(_settings.Theme);
+        ThemeManager.Apply(dialog, _settings.Theme);
+        var result = dialog.ShowDialog(this);
+
+        if (result != DialogResult.OK)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        if (dialog.RememberChoice)
+        {
+            _settings.SetCloseBehavior(dialog.Choice == CloseChoice.KeepRunning
+                ? WindowCloseBehavior.KeepRunning
+                : WindowCloseBehavior.ExitApplication);
+        }
+
+        e.Cancel = true;
+
+        if (dialog.Choice == CloseChoice.KeepRunning)
+        {
+            Hide();
+            _logger.Log("Game Manager closed to tray.");
+        }
+        else
+        {
+            _logger.Log("Game Manager requested full application exit.");
+            BeginInvoke(new Action(() => ExitRequested?.Invoke()));
+        }
     }
 
     private void OnThemeChanged(AppTheme theme)

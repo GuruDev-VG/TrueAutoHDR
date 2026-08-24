@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.2 — Window close behavior
+
+- Added close-window choice between background operation and full application exit.
+- Added optional remembered close behavior and Settings override.
+- No new background polling or runtime overhead.
+
+
 ## 1.3.1 — Release trust and verification
 
 - Added automatic SHA-256 release hash generation.

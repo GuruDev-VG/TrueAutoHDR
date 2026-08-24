@@ -11,6 +11,13 @@ public enum AppTheme
     Dark
 }
 
+public enum WindowCloseBehavior
+{
+    Ask,
+    KeepRunning,
+    ExitApplication
+}
+
 public sealed class AppSettings
 {
     public const string DefaultStableUpdateManifestUrl = "https://raw.githubusercontent.com/GuruDev-VG/TrueAutoHDR/main/update/stable.json";
@@ -26,6 +33,7 @@ public sealed class AppSettings
     public AppUpdateChannel UpdateChannel { get; private set; } = AppUpdateChannel.Stable;
     public string StableUpdateManifestUrl { get; private set; } = DefaultStableUpdateManifestUrl;
     public string CanaryUpdateManifestUrl { get; private set; } = DefaultCanaryUpdateManifestUrl;
+    public WindowCloseBehavior CloseBehavior { get; private set; } = WindowCloseBehavior.Ask;
     public event Action<AppTheme>? ThemeChanged;
     public event Action<bool>? RunAtStartupChanged;
     public event Action<string>? DatabaseManifestUrlChanged;
@@ -87,6 +95,13 @@ public sealed class AppSettings
     public string CurrentAppUpdateManifestUrl =>
         UpdateChannel == AppUpdateChannel.Canary ? CanaryUpdateManifestUrl : StableUpdateManifestUrl;
 
+    public void SetCloseBehavior(WindowCloseBehavior behavior)
+    {
+        if (CloseBehavior == behavior) return;
+        CloseBehavior = behavior;
+        Save();
+    }
+
     public void CompleteOnboarding()
     {
         if (OnboardingCompleted) return;
@@ -118,6 +133,8 @@ public sealed class AppSettings
                 CanaryUpdateManifestUrl = string.IsNullOrWhiteSpace(data.CanaryUpdateManifestUrl)
                     ? DefaultCanaryUpdateManifestUrl
                     : data.CanaryUpdateManifestUrl.Trim();
+                if (Enum.TryParse<WindowCloseBehavior>(data.CloseBehavior, true, out var closeBehavior))
+                    CloseBehavior = closeBehavior;
             }
         }
         catch (Exception ex)
@@ -139,7 +156,8 @@ public sealed class AppSettings
                 OnboardingCompleted = OnboardingCompleted,
                 UpdateChannel = UpdateChannel.ToString(),
                 StableUpdateManifestUrl = StableUpdateManifestUrl,
-                CanaryUpdateManifestUrl = CanaryUpdateManifestUrl
+                CanaryUpdateManifestUrl = CanaryUpdateManifestUrl,
+                CloseBehavior = CloseBehavior.ToString()
             }, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(_path, json);
         }
@@ -158,5 +176,6 @@ public sealed class AppSettings
         public string UpdateChannel { get; set; } = "Stable";
         public string StableUpdateManifestUrl { get; set; } = DefaultStableUpdateManifestUrl;
         public string CanaryUpdateManifestUrl { get; set; } = DefaultCanaryUpdateManifestUrl;
+        public string CloseBehavior { get; set; } = "Ask";
     }
 }

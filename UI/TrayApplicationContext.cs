@@ -59,7 +59,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         ThemeManager.Apply(_menu, _settings.Theme);
 
         _trayIcon = AppIcon.Create();
-        _tray = new NotifyIcon { Icon = _trayIcon, Text = "TrueAuto HDR 1.3.1", Visible = true, ContextMenuStrip = _menu };
+        _tray = new NotifyIcon { Icon = _trayIcon, Text = "TrueAuto HDR 1.3.2", Visible = true, ContextMenuStrip = _menu };
         _tray.DoubleClick += (_, _) => ShowManager();
         watcher.StatusChanged += text => RunOnUi(() => _statusItem.Text = text);
         watcher.Start(startupMode);
@@ -107,6 +107,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         {
             _manager = new GameManagerForm(_games, _database, _community.Value, _steamStore.Value, _pcgwHdr.Value, _databaseUpdater, _hdrSourcesUpdater, _appUpdates, _rules, _diagnostics, _logger, _settings, _startup);
             _manager.DatabaseChanged += () => RunOnUi(() => _dbItem.Text = $"HDR database: {_database.Count} games");
+            _manager.ExitRequested += ExitThread;
         }
         ThemeManager.Apply(_manager, _settings.Theme);
         _manager.Show(); _manager.BringToFront(); _manager.Activate();
