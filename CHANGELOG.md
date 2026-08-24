@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0 — Automation and reliability
+
+- Added per-game HDR timing/exit/display rules.
+- Added per-display HDR session state tracking.
+- Added on-demand diagnostics.
+- Added update backup and manual rollback.
+- Kept all new features event-driven/on-demand to protect idle CPU and memory usage.
+
 ## 1.2.3 — Public repository preparation
 
 - Prepared the source tree for public GitHub development.

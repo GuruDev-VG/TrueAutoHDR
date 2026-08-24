@@ -10,53 +10,59 @@ public sealed class HdrController
     private readonly FileLogger _logger;
     public HdrController(FileLogger logger) => _logger = logger;
 
-    // Compatibility name retained for the rest of the app. The aggregate now
-    // intentionally represents only the Windows primary display.
-    public HdrAggregateState GetAggregateState()
+    public HdrAggregateState GetAggregateState() => GetStateForDisplay(null);
+
+    public HdrAggregateState GetStateForDisplay(string? deviceName)
     {
-        var primary = DisplayConfigNative.TryGetPrimaryTarget();
-        if (primary is null)
+        var target = string.IsNullOrWhiteSpace(deviceName)
+            ? DisplayConfigNative.TryGetPrimaryTarget()
+            : DisplayConfigNative.TryGetTargetForDeviceName(deviceName);
+
+        if (target is null)
         {
-            _logger.Log("Could not resolve the Windows primary display target.");
+            _logger.Log($"Could not resolve HDR display target: {(string.IsNullOrWhiteSpace(deviceName) ? "Windows primary display" : deviceName)}.");
             return new HdrAggregateState(false, 0);
         }
 
-        var state = DisplayConfigNative.TryGetAdvancedColorState(primary.Value);
+        var state = DisplayConfigNative.TryGetAdvancedColorState(target.Value);
         if (state is null || !state.Value.Supported)
         {
-            _logger.Log("Windows primary display does not report HDR support.");
+            _logger.Log($"Display {(string.IsNullOrWhiteSpace(deviceName) ? "primary" : deviceName)} does not report HDR support.");
             return new HdrAggregateState(false, 0);
         }
 
         return new HdrAggregateState(state.Value.Enabled, 1);
     }
 
-    // Compatibility name retained so existing watcher code needs no behavioral
-    // changes. Only the Windows primary display is modified.
-    public void SetHdrOnAllSupportedTargets(bool enabled)
+    public void SetHdrOnAllSupportedTargets(bool enabled) => SetHdrForDisplay(enabled, null);
+
+    public void SetHdrForDisplay(bool enabled, string? deviceName)
     {
-        var primary = DisplayConfigNative.TryGetPrimaryTarget();
-        if (primary is null)
+        var target = string.IsNullOrWhiteSpace(deviceName)
+            ? DisplayConfigNative.TryGetPrimaryTarget()
+            : DisplayConfigNative.TryGetTargetForDeviceName(deviceName);
+
+        if (target is null)
         {
-            _logger.Log($"HDR {(enabled ? "enable" : "disable")} skipped: primary display target was not found.");
+            _logger.Log($"HDR {(enabled ? "enable" : "disable")} skipped: display target {(string.IsNullOrWhiteSpace(deviceName) ? "primary" : deviceName)} was not found.");
             return;
         }
 
-        var state = DisplayConfigNative.TryGetAdvancedColorState(primary.Value);
+        var state = DisplayConfigNative.TryGetAdvancedColorState(target.Value);
         if (state is null || !state.Value.Supported)
         {
-            _logger.Log($"HDR {(enabled ? "enable" : "disable")} skipped: primary display is not HDR-capable.");
+            _logger.Log($"HDR {(enabled ? "enable" : "disable")} skipped: display {(string.IsNullOrWhiteSpace(deviceName) ? "primary" : deviceName)} is not HDR-capable.");
             return;
         }
 
         if (state.Value.Enabled == enabled)
         {
-            _logger.Log($"Primary display HDR is already {(enabled ? "ON" : "OFF")}; no change needed.");
+            _logger.Log($"Display {(string.IsNullOrWhiteSpace(deviceName) ? "primary" : deviceName)} HDR is already {(enabled ? "ON" : "OFF")}; no change needed.");
             return;
         }
 
-        DisplayConfigNative.SetAdvancedColorState(primary.Value, enabled);
-        _logger.Log($"Requested HDR={(enabled ? "ON" : "OFF")} on Windows primary display only.");
+        DisplayConfigNative.SetAdvancedColorState(target.Value, enabled);
+        _logger.Log($"Requested HDR={(enabled ? "ON" : "OFF")} on {(string.IsNullOrWhiteSpace(deviceName) ? "Windows primary display" : deviceName)}.");
     }
 }
 
@@ -237,14 +243,14 @@ internal static class DisplayConfigNative
 
     internal static Target? TryGetPrimaryTarget()
     {
-        // Screen.PrimaryScreen resolves the display Windows marks as "Make this
-        // my main display". We then map its GDI name (for example \\.\DISPLAY1)
-        // to the corresponding DisplayConfig source and return that path's
-        // target, which is what the Advanced Color API operates on.
         var primaryDeviceName = System.Windows.Forms.Screen.PrimaryScreen?.DeviceName;
-        if (string.IsNullOrWhiteSpace(primaryDeviceName))
-            return null;
+        return string.IsNullOrWhiteSpace(primaryDeviceName)
+            ? null
+            : TryGetTargetForDeviceName(primaryDeviceName);
+    }
 
+    internal static Target? TryGetTargetForDeviceName(string deviceName)
+    {
         var result = GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount);
         if (result != ERROR_SUCCESS) throw new Win32Exception(result);
 
@@ -271,7 +277,7 @@ internal static class DisplayConfigNative
             if (DisplayConfigGetDeviceInfo(ref request) != ERROR_SUCCESS)
                 continue;
 
-            if (string.Equals(request.viewGdiDeviceName, primaryDeviceName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(request.viewGdiDeviceName, deviceName, StringComparison.OrdinalIgnoreCase))
                 return new Target(paths[i].targetInfo.adapterId, paths[i].targetInfo.id);
         }
 

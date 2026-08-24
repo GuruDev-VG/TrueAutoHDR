@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title TrueAuto HDR 1.2.6 - Portable Builder
+title TrueAuto HDR 1.3.0 - Portable Builder
 
 set "OUT=%~dp0release\Portable\TrueAutoHDR"
-set "ZIP=%~dp0release\Portable\TrueAutoHDR-1.2.6-Portable.zip"
+set "ZIP=%~dp0release\Portable\TrueAutoHDR-1.3.0-Portable.zip"
 
 where dotnet >nul 2>nul
 if errorlevel 1 (

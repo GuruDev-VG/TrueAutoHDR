@@ -2,6 +2,8 @@ using AutoHDR.Database;
 using AutoHDR.GameWatcher;
 using AutoHDR.HDR;
 using AutoHDR.UI;
+using AutoHDR.Rules;
+using AutoHDR.Diagnostics;
 using AutoHDR.Updates;
 
 namespace AutoHDR;
@@ -68,7 +70,7 @@ internal static class Program
         Directory.CreateDirectory(appData);
 
         var logger = new FileLogger(Path.Combine(appData, "trueautohdr.log"));
-        logger.Log($"TrueAuto HDR v1.2.6 starting. mode={(portableMode ? "portable" : "installed")}, startup={startupMode}.");
+        logger.Log($"TrueAuto HDR v1.3.0 starting. mode={(portableMode ? "portable" : "installed")}, startup={startupMode}.");
 
         Application.ThreadException += (_, e) =>
             ReportFatalError(logger, "WinForms UI exception", e.Exception);
@@ -101,7 +103,9 @@ internal static class Program
         var pcgwHdr = new Lazy<PcgwHdrListClient>(() => new PcgwHdrListClient(logger));
         var hdrSourcesUpdater = new HdrSourcesUpdater(games, database, pcgwHdr.Value, databaseUpdater, logger);
         var appUpdates = new AppUpdateService(appData, logger);
+        var rules = new GameRuleStore(Path.Combine(appData, "game_rules.json"), logger);
         var hdr = new HdrController(logger);
+        var diagnostics = new DiagnosticsService(games, database, hdr, rules, settings);
 
         if (selfTestMode)
         {
@@ -109,8 +113,8 @@ internal static class Program
             return;
         }
 
-        var watcher = new GameProcessWatcher(games, database, hdr, logger);
-        Application.Run(new TrayApplicationContext(watcher, games, database, community, steamStore, pcgwHdr, databaseUpdater, hdrSourcesUpdater, appUpdates, logger, settings, startup, startupMode));
+        var watcher = new GameProcessWatcher(games, database, hdr, rules, logger);
+        Application.Run(new TrayApplicationContext(watcher, games, database, community, steamStore, pcgwHdr, databaseUpdater, hdrSourcesUpdater, appUpdates, rules, diagnostics, logger, settings, startup, startupMode));
     }
 
     private static void RunSelfTest(

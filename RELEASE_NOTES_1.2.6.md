@@ -28,3 +28,10 @@ This is the definitive 1.2.6 source release.
 ### Unchanged
 
 No intentional changes to HDR detection behavior, PCGamingWiki verification, storefront detection, watcher performance, or database logic.
+
+
+### Update staging hotfix
+
+- Fixed the update ZIP remaining open after SHA-256 verification.
+- The hash stream is now explicitly disposed before extraction/staging.
+- Prevents Windows error: `The process cannot access the file 'update.zip' because it is being used by another process.`

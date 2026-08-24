@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title TrueAuto HDR 1.2.6 Builder
+title TrueAuto HDR 1.3.0 Builder
 
 echo ========================================
-echo       TrueAuto HDR 1.2.6 Builder
+echo       TrueAuto HDR 1.3.0 Builder
 echo ========================================
 echo.
 

@@ -16,6 +16,7 @@ public sealed class SettingsForm : Form
     private readonly TextBox _stableUpdateUrl = new();
     private readonly TextBox _canaryUpdateUrl = new();
     private readonly Button _checkAppUpdate = new();
+    private readonly Button _rollbackUpdate = new();
     private readonly ComboBox _themeCombo = new();
     private readonly CheckBox _startupToggle = new();
     private readonly TextBox _databaseUrl = new();
@@ -124,6 +125,11 @@ public sealed class SettingsForm : Form
         _checkAppUpdate.Anchor = AnchorStyles.Right;
         _checkAppUpdate.Click += async (_, _) => await CheckAppUpdateAsync();
 
+        _rollbackUpdate.Text = "Rollback last update";
+        _rollbackUpdate.AutoSize = true;
+        _rollbackUpdate.Enabled = _appUpdates.CanRollback;
+        _rollbackUpdate.Click += (_, _) => RollbackLastUpdate();
+
         var dbTitle = new Label
         {
             Text = "HDR source updates",
@@ -187,7 +193,16 @@ public sealed class SettingsForm : Form
         grid.Controls.Add(_stableUpdateUrl, 1, 7);
         grid.Controls.Add(new Label { Text = "Canary manifest", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 8);
         grid.Controls.Add(_canaryUpdateUrl, 1, 8);
-        grid.Controls.Add(_checkAppUpdate, 1, 9);
+        var updateButtons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Tag = "content"
+        };
+        updateButtons.Controls.Add(_checkAppUpdate);
+        updateButtons.Controls.Add(_rollbackUpdate);
+        grid.Controls.Add(updateButtons, 1, 9);
 
         grid.Controls.Add(dbTitle, 0, 10); grid.SetColumnSpan(dbTitle, 2);
         grid.Controls.Add(dbHint, 0, 11); grid.SetColumnSpan(dbHint, 2);
@@ -248,6 +263,29 @@ public sealed class SettingsForm : Form
             _checkAppUpdate.Text = "Check for app update";
             _checkAppUpdate.Enabled = true;
         }
+    }
+
+    private void RollbackLastUpdate()
+    {
+        if (!_appUpdates.CanRollback)
+        {
+            MessageBox.Show(this, "No previous application backup is available.",
+                "TrueAuto HDR — Rollback", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        if (MessageBox.Show(this,
+            "Restore the application files from the most recent update backup?\n\n" +
+            "Your settings, game rules, logs and HDR database will not be rolled back.",
+            "TrueAuto HDR — Rollback",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning) != DialogResult.Yes)
+            return;
+
+        var result = _appUpdates.StartRollback();
+        MessageBox.Show(this, result.Message, "TrueAuto HDR — Rollback",
+            MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        if (result.Success) Application.Exit();
     }
 
     private async Task CheckDatabaseAsync()

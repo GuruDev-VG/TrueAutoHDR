@@ -1,13 +1,13 @@
 # Version baseline
 
-This repository tree is the definitive **TrueAuto HDR 1.2.6** source.
+This repository tree is the definitive **TrueAuto HDR 1.3.0** source.
 
-Included in 1.2.6:
-- hardened GitHub application updater
-- GitHub API fallback / HTTP diagnostics
-- Game Manager invisible-first-frame white-splash fix
-- Per-Monitor V2 DPI handling
-- Stable / Canary update channels
-- PCGamingWiki HDR verification
+Key 1.3.0 additions:
+- per-game HDR enable delay / exit grace / keep-HDR rules
+- per-game display override
+- independent per-display HDR session state
+- on-demand diagnostics
+- application update backups and manual rollback
+- production-friendly `BuildUpdatePackage.bat`
 
-Do not use the earlier 1.2.6 or 1.2.7 experimental ZIPs as the repository baseline.
+All new runtime behavior is event-driven or on-demand; no additional idle polling loops were introduced.

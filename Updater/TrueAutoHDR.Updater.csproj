@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>TrueAutoHDR.Updater</AssemblyName>
     <RootNamespace>TrueAutoHDR.Updater</RootNamespace>
-    <Version>1.2.6</Version>
+    <Version>1.3.0</Version>
     <Company>VG Prod.</Company>
     <Product>TrueAuto HDR Updater</Product>
   </PropertyGroup>

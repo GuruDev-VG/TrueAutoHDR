@@ -48,7 +48,7 @@ public sealed class AppUpdateService
         {
             Timeout = TimeSpan.FromMinutes(3)
         };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("TrueAutoHDR/1.2.6");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("TrueAutoHDR/1.3.0");
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json", 0.8));
     }
@@ -156,7 +156,18 @@ public sealed class AppUpdateService
 
             var target = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
             var exe = Environment.ProcessPath ?? Path.Combine(target, "TrueAutoHDR.exe");
-            var args = $"--wait {Environment.ProcessId} --source \"{payload}\" --target \"{target}\" --restart \"{exe}\"";
+
+            var backupRoot = Path.Combine(_appData, "Updates", "Backups");
+            Directory.CreateDirectory(backupRoot);
+            PruneOldBackups(backupRoot, keep: 1);
+            var backup = Path.Combine(
+                backupRoot,
+                $"{DateTime.UtcNow:yyyyMMdd-HHmmss}-before-{update.Version}");
+
+            var args =
+                $"--wait {Environment.ProcessId} --source \"{payload}\" --target \"{target}\" " +
+                $"--restart \"{exe}\" --backup \"{backup}\"";
+
             Process.Start(new ProcessStartInfo(updater, args)
             {
                 UseShellExecute = true,
@@ -168,6 +179,76 @@ public sealed class AppUpdateService
         {
             _logger.Log($"Could not stage app update {update.Version}: {ex}");
             return (false, $"Could not stage update: {ex.Message}");
+        }
+    }
+
+    private void PruneOldBackups(string root, int keep)
+    {
+        try
+        {
+            var old = Directory.EnumerateDirectories(root)
+                .OrderByDescending(Directory.GetCreationTimeUtc)
+                .Skip(Math.Max(0, keep))
+                .ToArray();
+            foreach (var dir in old) Directory.Delete(dir, true);
+        }
+        catch (Exception ex)
+        {
+            _logger.Log($"Could not prune old update backups: {ex.Message}");
+        }
+    }
+
+    public string? LatestRollbackDirectory
+    {
+        get
+        {
+            try
+            {
+                var root = Path.Combine(_appData, "Updates", "Backups");
+                if (!Directory.Exists(root)) return null;
+                return Directory.EnumerateDirectories(root)
+                    .OrderByDescending(Directory.GetCreationTimeUtc)
+                    .FirstOrDefault(d => Directory.EnumerateFiles(d, "*", SearchOption.AllDirectories).Any());
+            }
+            catch { return null; }
+        }
+    }
+
+    public bool CanRollback => LatestRollbackDirectory is not null;
+
+    public (bool Success, string Message) StartRollback()
+    {
+        try
+        {
+            var backup = LatestRollbackDirectory;
+            if (backup is null)
+                return (false, "No previous TrueAuto HDR update backup is available.");
+
+            var installedUpdater = Path.Combine(AppContext.BaseDirectory, "TrueAutoHDR.Updater.exe");
+            if (!File.Exists(installedUpdater))
+                return (false, "TrueAutoHDR.Updater.exe is missing.");
+
+            var runner = Path.Combine(_appData, "Updates", "rollback-runner");
+            Directory.CreateDirectory(runner);
+            var updater = Path.Combine(runner, "TrueAutoHDR.Updater.exe");
+            File.Copy(installedUpdater, updater, true);
+
+            var target = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+            var exe = Environment.ProcessPath ?? Path.Combine(target, "TrueAutoHDR.exe");
+            var args = $"--wait {Environment.ProcessId} --restore \"{backup}\" --target \"{target}\" --restart \"{exe}\"";
+
+            Process.Start(new ProcessStartInfo(updater, args)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = runner
+            });
+
+            return (true, "Rollback started. TrueAuto HDR will close and restore the previous application files.");
+        }
+        catch (Exception ex)
+        {
+            _logger.Log($"Could not start rollback: {ex}");
+            return (false, $"Could not start rollback: {ex.Message}");
         }
     }
 
@@ -222,7 +303,7 @@ public sealed class AppUpdateService
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-            request.Headers.UserAgent.ParseAdd("TrueAutoHDR/1.2.6");
+            request.Headers.UserAgent.ParseAdd("TrueAutoHDR/1.3.0");
             request.Headers.Accept.Clear();
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(
                 githubApiAsset ? "application/octet-stream" : "*/*"));
@@ -306,7 +387,7 @@ public sealed class AppUpdateService
                 $"{Uri.EscapeDataString(repo)}/releases/tags/{Uri.EscapeDataString(tag)}");
 
             using var request = new HttpRequestMessage(HttpMethod.Get, api);
-            request.Headers.UserAgent.ParseAdd("TrueAutoHDR/1.2.6");
+            request.Headers.UserAgent.ParseAdd("TrueAutoHDR/1.3.0");
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
             request.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", "2022-11-28");
 

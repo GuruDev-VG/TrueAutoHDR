@@ -1,6 +1,7 @@
 using AutoHDR.Database;
 using AutoHDR.HDR;
 using AutoHDR.Models;
+using AutoHDR.Rules;
 
 namespace AutoHDR.GameWatcher;
 
@@ -10,19 +11,20 @@ public sealed class GameProcessWatcher : IDisposable
     private readonly HdrDatabase _database;
     private readonly HdrController _hdr;
     private readonly FileLogger _logger;
+    private readonly GameRuleStore _rules;
     private readonly CancellationTokenSource _cts = new();
     private readonly Dictionary<int, InstalledGame> _trackedProcesses = new();
     private readonly HashSet<int> _seenProcessIds = new();
-    private readonly HashSet<string> _activeHdrGames = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _activeHdrGames = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, bool> _hdrStateBeforeByDisplay = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _stateGate = new(1, 1);
     private Task? _loop;
-    private bool? _hdrStateBeforeFirstGame;
-
+    
     public event Action<string>? StatusChanged;
 
-    public GameProcessWatcher(UnifiedGameDetector games, HdrDatabase database, HdrController hdr, FileLogger logger)
+    public GameProcessWatcher(UnifiedGameDetector games, HdrDatabase database, HdrController hdr, GameRuleStore rules, FileLogger logger)
     {
-        _games = games; _database = database; _hdr = hdr; _logger = logger;
+        _games = games; _database = database; _hdr = hdr; _rules = rules; _logger = logger;
     }
 
     public void Start(bool startupMode = false)
@@ -103,19 +105,45 @@ public sealed class GameProcessWatcher : IDisposable
             }
 
             _logger.Log($"Local HDR DB hit: {entry.Name} for {game.Name} [{game.Store}], source={entry.Source}, identity={identity.MatchType}, confidence={identity.ConfidenceLabel}, score={identity.Score}.");
+
+            var rule = _rules.Get(game);
+            if (rule.EnableDelayMs > 0)
+            {
+                _logger.Log($"{game.Name}: delaying HDR enable by {rule.EnableDelayMs} ms.");
+                await Task.Delay(rule.EnableDelayMs, ct);
+
+                // If the process disappeared while waiting, do not flash HDR on
+                // for a game that has already closed.
+                if (!_trackedProcesses.Values.Any(g => g.Key.Equals(game.Key, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _logger.Log($"{game.Name}: process exited during HDR enable delay; cancelled.");
+                    return;
+                }
+            }
+
             await _stateGate.WaitAsync(ct);
             try
             {
-                if (!_activeHdrGames.Add(game.Key)) return;
-                if (_activeHdrGames.Count == 1)
+                if (_activeHdrGames.ContainsKey(game.Key)) return;
+
+                var displayName = string.IsNullOrWhiteSpace(rule.DisplayDeviceName)
+                    ? ""
+                    : rule.DisplayDeviceName;
+                var displayKey = string.IsNullOrWhiteSpace(displayName) ? "<primary>" : displayName;
+                var alreadyActiveOnDisplay = _activeHdrGames.Values.Any(v =>
+                    v.Equals(displayKey, StringComparison.OrdinalIgnoreCase));
+
+                _activeHdrGames[game.Key] = displayKey;
+
+                if (!alreadyActiveOnDisplay)
                 {
-                    var state = _hdr.GetAggregateState();
-                    _hdrStateBeforeFirstGame = state.AnyHdrEnabled;
-                    _logger.Log($"Saving pre-game HDR state: enabled={_hdrStateBeforeFirstGame}, supportedTargets={state.SupportedTargetCount}.");
+                    var state = _hdr.GetStateForDisplay(displayName);
+                    _hdrStateBeforeByDisplay[displayKey] = state.AnyHdrEnabled;
+                    _logger.Log($"Saving pre-game HDR state for {displayKey}: enabled={state.AnyHdrEnabled}, supportedTargets={state.SupportedTargetCount}.");
                     if (!state.AnyHdrEnabled)
                     {
-                        _logger.Log("Native-HDR game detected; enabling Windows HDR.");
-                        _hdr.SetHdrOnAllSupportedTargets(true);
+                        _logger.Log($"Native-HDR game detected; enabling Windows HDR on {displayKey}.");
+                        _hdr.SetHdrForDisplay(true, displayName);
                     }
                 }
                 PublishStatus($"HDR ON — {game.Name}");
@@ -132,22 +160,54 @@ public sealed class GameProcessWatcher : IDisposable
 
     private async Task HandleGameExitedAsync(InstalledGame game)
     {
+        var rule = _rules.Get(game);
+        if (rule.ExitGraceMs > 0)
+        {
+            _logger.Log($"{game.Name}: applying {rule.ExitGraceMs} ms exit grace period.");
+            await Task.Delay(rule.ExitGraceMs);
+
+            // Launchers sometimes replace/restart the real game process. If the
+            // same game came back during the grace period, leave the HDR session.
+            if (_trackedProcesses.Values.Any(g => g.Key.Equals(game.Key, StringComparison.OrdinalIgnoreCase)))
+            {
+                _logger.Log($"{game.Name}: process returned during exit grace period; HDR session preserved.");
+                return;
+            }
+        }
+
         await _stateGate.WaitAsync();
         try
         {
-            if (!_activeHdrGames.Remove(game.Key)) return;
+            if (!_activeHdrGames.Remove(game.Key, out var displayKey)) return;
             _logger.Log($"Native-HDR game exited: {game.Name} [{game.Store}:{game.StoreId}].");
-            if (_activeHdrGames.Count == 0)
+
+            var stillActiveOnDisplay = _activeHdrGames.Values.Any(v =>
+                v.Equals(displayKey, StringComparison.OrdinalIgnoreCase));
+
+            if (!stillActiveOnDisplay)
             {
-                if (_hdrStateBeforeFirstGame == false)
+                var displayName = displayKey == "<primary>" ? "" : displayKey;
+                _hdrStateBeforeByDisplay.TryGetValue(displayKey, out var beforeEnabled);
+
+                if (rule.KeepHdrAfterExit)
                 {
-                    _hdr.SetHdrOnAllSupportedTargets(false);
-                    _logger.Log("Restored HDR to OFF.");
+                    _logger.Log($"{game.Name}: per-game rule keeps HDR enabled after exit on {displayKey}.");
                 }
-                else _logger.Log("HDR was already enabled before the game; leaving it enabled.");
-                _hdrStateBeforeFirstGame = null;
-                PublishStatus("Watching for games…");
+                else if (!beforeEnabled)
+                {
+                    _hdr.SetHdrForDisplay(false, displayName);
+                    _logger.Log($"Restored HDR to OFF on {displayKey}.");
+                }
+                else
+                {
+                    _logger.Log($"HDR was already enabled before the game on {displayKey}; leaving it enabled.");
+                }
+
+                _hdrStateBeforeByDisplay.Remove(displayKey);
             }
+
+            if (_activeHdrGames.Count == 0)
+                PublishStatus("Watching for games…");
         }
         finally { _stateGate.Release(); }
     }

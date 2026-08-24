@@ -1,6 +1,8 @@
 using AutoHDR.Database;
 using AutoHDR.GameWatcher;
 using AutoHDR.Updates;
+using AutoHDR.Rules;
+using AutoHDR.Diagnostics;
 
 namespace AutoHDR.UI;
 
@@ -22,17 +24,20 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly HdrSourcesUpdater _hdrSourcesUpdater;
     private readonly AppSettings _settings;
     private readonly AppUpdateService _appUpdates;
+    private readonly GameRuleStore _rules;
+    private readonly DiagnosticsService _diagnostics;
     private readonly StartupManager _startup;
     private GameManagerForm? _manager;
     private System.Windows.Forms.Timer? _onboardingTimer;
 
-    public TrayApplicationContext(GameProcessWatcher watcher, UnifiedGameDetector games, HdrDatabase database, Lazy<CommunityHdrSources> community, Lazy<SteamStoreHdrClient> steamStore, Lazy<PcgwHdrListClient> pcgwHdr, DatabaseUpdater databaseUpdater, HdrSourcesUpdater hdrSourcesUpdater, AppUpdateService appUpdates, FileLogger logger, AppSettings settings, StartupManager startup, bool startupMode)
+    public TrayApplicationContext(GameProcessWatcher watcher, UnifiedGameDetector games, HdrDatabase database, Lazy<CommunityHdrSources> community, Lazy<SteamStoreHdrClient> steamStore, Lazy<PcgwHdrListClient> pcgwHdr, DatabaseUpdater databaseUpdater, HdrSourcesUpdater hdrSourcesUpdater, AppUpdateService appUpdates, GameRuleStore rules, DiagnosticsService diagnostics, FileLogger logger, AppSettings settings, StartupManager startup, bool startupMode)
     {
-        _watcher = watcher; _games = games; _database = database; _community = community; _steamStore = steamStore; _pcgwHdr = pcgwHdr; _databaseUpdater = databaseUpdater; _hdrSourcesUpdater = hdrSourcesUpdater; _appUpdates = appUpdates; _logger = logger; _settings = settings; _startup = startup;
+        _watcher = watcher; _games = games; _database = database; _community = community; _steamStore = steamStore; _pcgwHdr = pcgwHdr; _databaseUpdater = databaseUpdater; _hdrSourcesUpdater = hdrSourcesUpdater; _appUpdates = appUpdates; _rules = rules; _diagnostics = diagnostics; _logger = logger; _settings = settings; _startup = startup;
         _statusItem = new ToolStripMenuItem("Starting…") { Enabled = false };
         _dbItem = new ToolStripMenuItem($"HDR database: {database.Count} games") { Enabled = false };
         var manage = new ToolStripMenuItem("Manage games…", null, (_, _) => ShowManager());
         var openDb = new ToolStripMenuItem("Open local database", null, (_, _) => OpenFile(_database.UserDatabasePath));
+        var diagnosticsItem = new ToolStripMenuItem("Diagnostics…", null, (_, _) => ShowDiagnostics());
         var openLog = new ToolStripMenuItem("Open log", null, (_, _) => OpenFile(_logger.Path));
         var updateApp = new ToolStripMenuItem("Check for app update", null, async (_, _) => await CheckAppUpdateAsync());
         var updateDb = new ToolStripMenuItem("Check database update", null, async (_, _) => await UpdateDatabaseAsync());
@@ -43,7 +48,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _menu = new ContextMenuStrip();
         _menu.Items.Add(_statusItem); _menu.Items.Add(_dbItem); _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(manage); _menu.Items.Add(new ToolStripSeparator());
-        _menu.Items.Add(openDb); _menu.Items.Add(updateApp); _menu.Items.Add(updateDb); _menu.Items.Add(openLog); _menu.Items.Add(firstRunItem); _menu.Items.Add(settingsItem); _menu.Items.Add(new ToolStripSeparator()); _menu.Items.Add(exit);
+        _menu.Items.Add(openDb); _menu.Items.Add(updateApp); _menu.Items.Add(updateDb); _menu.Items.Add(diagnosticsItem); _menu.Items.Add(openLog); _menu.Items.Add(firstRunItem); _menu.Items.Add(settingsItem); _menu.Items.Add(new ToolStripSeparator()); _menu.Items.Add(exit);
         _menu.CreateControl();
 
         _settings.ThemeChanged += theme => RunOnUi(() =>
@@ -54,7 +59,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         ThemeManager.Apply(_menu, _settings.Theme);
 
         _trayIcon = AppIcon.Create();
-        _tray = new NotifyIcon { Icon = _trayIcon, Text = "TrueAuto HDR 1.2.6", Visible = true, ContextMenuStrip = _menu };
+        _tray = new NotifyIcon { Icon = _trayIcon, Text = "TrueAuto HDR 1.3.0", Visible = true, ContextMenuStrip = _menu };
         _tray.DoubleClick += (_, _) => ShowManager();
         watcher.StatusChanged += text => RunOnUi(() => _statusItem.Text = text);
         watcher.Start(startupMode);
@@ -100,7 +105,7 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         if (_manager is null || _manager.IsDisposed)
         {
-            _manager = new GameManagerForm(_games, _database, _community.Value, _steamStore.Value, _pcgwHdr.Value, _databaseUpdater, _hdrSourcesUpdater, _appUpdates, _logger, _settings, _startup);
+            _manager = new GameManagerForm(_games, _database, _community.Value, _steamStore.Value, _pcgwHdr.Value, _databaseUpdater, _hdrSourcesUpdater, _appUpdates, _rules, _diagnostics, _logger, _settings, _startup);
             _manager.DatabaseChanged += () => RunOnUi(() => _dbItem.Text = $"HDR database: {_database.Count} games");
         }
         ThemeManager.Apply(_manager, _settings.Theme);
@@ -185,6 +190,13 @@ public sealed class TrayApplicationContext : ApplicationContext
                 MessageBoxButtons.OK,
                 result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         });
+    }
+
+    private void ShowDiagnostics()
+    {
+        using var form = new DiagnosticsForm(_diagnostics, _settings.Theme);
+        ThemeManager.Apply(form, _settings.Theme);
+        form.ShowDialog();
     }
 
     private void ShowSettings()

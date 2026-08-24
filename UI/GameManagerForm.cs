@@ -2,6 +2,8 @@ using System.Diagnostics;
 using AutoHDR.Database;
 using AutoHDR.GameWatcher;
 using AutoHDR.Updates;
+using AutoHDR.Rules;
+using AutoHDR.Diagnostics;
 using AutoHDR.Models;
 
 namespace AutoHDR.UI;
@@ -19,6 +21,8 @@ public sealed class GameManagerForm : Form
     private readonly AppSettings _settings;
     private readonly StartupManager _startup;
     private readonly AppUpdateService _appUpdates;
+    private readonly GameRuleStore _rules;
+    private readonly DiagnosticsService _diagnostics;
     private readonly DataGridView _grid = new();
     private readonly TextBox _search = new();
     private readonly Label _summary = new();
@@ -29,7 +33,7 @@ public sealed class GameManagerForm : Form
 
     public event Action? DatabaseChanged;
 
-    public GameManagerForm(UnifiedGameDetector games, HdrDatabase database, CommunityHdrSources community, SteamStoreHdrClient steamStore, PcgwHdrListClient pcgwHdr, DatabaseUpdater databaseUpdater, HdrSourcesUpdater hdrSourcesUpdater, AppUpdateService appUpdates, FileLogger logger, AppSettings settings, StartupManager startup)
+    public GameManagerForm(UnifiedGameDetector games, HdrDatabase database, CommunityHdrSources community, SteamStoreHdrClient steamStore, PcgwHdrListClient pcgwHdr, DatabaseUpdater databaseUpdater, HdrSourcesUpdater hdrSourcesUpdater, AppUpdateService appUpdates, GameRuleStore rules, DiagnosticsService diagnostics, FileLogger logger, AppSettings settings, StartupManager startup)
     {
         _games = games;
         _database = database;
@@ -42,6 +46,8 @@ public sealed class GameManagerForm : Form
         _settings = settings;
         _startup = startup;
         _appUpdates = appUpdates;
+        _rules = rules;
+        _diagnostics = diagnostics;
 
         // All layout values in this form are authored at 96 DPI.
         // Explicit DPI scaling avoids Font autoscaling producing a different
@@ -59,7 +65,7 @@ public sealed class GameManagerForm : Form
                  ControlStyles.OptimizedDoubleBuffer, true);
         UpdateStyles();
 
-        Text = "TrueAuto HDR 1.2.6 — Game Manager";
+        Text = "TrueAuto HDR 1.3.0 — Game Manager";
         Icon = AppIcon.Create();
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(1040, 700);
@@ -181,6 +187,7 @@ public sealed class GameManagerForm : Form
                 CreateActionCard("+", "Add standalone EXE", "Register a game executable that is not managed by a supported launcher.", "green", (_, _) => AddStandaloneExecutable()),
                 CreateActionCard("✓", "Mark Native HDR", "Enable automatic Windows HDR for the selected game.", "amber", async (_, _) => await MarkSelectedAsync(true)),
                 CreateActionCard("−", "Mark SDR / Disabled", "Never auto-enable HDR for the selected game.", "amber", async (_, _) => await MarkSelectedAsync(false)),
+                CreateActionCard("⏱", "Per-game rules", "Set HDR enable delay, exit grace, or keep-HDR behavior.", "purple", (_, _) => EditSelectedRules()),
                 CreateActionCard("↶", "Clear override", "Return the selected game to the bundled database decision.", "neutral", async (_, _) => await ClearOverrideAsync()),
                 CreateActionCard("⇩", "Import JSON", "Import game decisions as local user overrides.", "neutral", async (_, _) => await ImportAsync()),
                 CreateActionCard("⇧", "Export DB", "Export the merged HDR database to a JSON file.", "neutral", async (_, _) => await ExportAsync())
@@ -621,6 +628,36 @@ public sealed class GameManagerForm : Form
             };
         }
         return card;
+    }
+
+    private void EditSelectedRules()
+    {
+        var game = SelectedGame();
+        if (game is null)
+        {
+            MessageBox.Show(this, "Select a game first.", "Per-game rules",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var form = new GameRuleForm(game, _rules.Get(game), _settings.Theme);
+        ThemeManager.Apply(form, _settings.Theme);
+        if (form.ShowDialog(this) != DialogResult.OK) return;
+
+        _rules.Set(game, form.Result);
+        _scanStatus.Text = form.Result.EnableDelayMs == 0 &&
+                           form.Result.ExitGraceMs == 0 &&
+                           !form.Result.KeepHdrAfterExit &&
+                           string.IsNullOrWhiteSpace(form.Result.DisplayDeviceName)
+            ? $"{game.Name}: using default HDR behavior."
+            : $"{game.Name}: per-game rules saved.";
+    }
+
+    private void ShowDiagnostics()
+    {
+        using var form = new DiagnosticsForm(_diagnostics, _settings.Theme);
+        ThemeManager.Apply(form, _settings.Theme);
+        form.ShowDialog(this);
     }
 
     private InstalledGame? SelectedGame() => _grid.SelectedRows.Count == 0 ? null : _grid.SelectedRows[0].Tag as InstalledGame;
