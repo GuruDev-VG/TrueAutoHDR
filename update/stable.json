@@ -1,7 +1,7 @@
 ﻿{
-    "version":  "1.3.0",
+    "version":  "1.3.1",
     "releaseType":  "Stable",
-    "packageUrl":  "https://github.com/GuruDev-VG/TrueAutoHDR/releases/download/v1.3.0/TrueAutoHDR-update-1.3.0.zip",
-    "sha256":  "4889fd3df4f8f5d00fe89ecc6bf3a2b4b7a5860243241d9905165f3bee52ce21",
-    "notes":  "TrueAuto HDR 1.3.0: per-game rules, display overrides, diagnostics, and update rollback."
+    "packageUrl":  "https://github.com/GuruDev-VG/TrueAutoHDR/releases/download/v1.3.1/TrueAutoHDR-update-1.3.1.zip",
+    "sha256":  "52d48266cf4f3e2e37d78f0efabc5f14337fb8a38ca75ad0af75b3d20f9b2d99",
+    "notes":  "TrueAuto HDR 1.3.1: per-game rules, display overrides, diagnostics, and update rollback."
 }
