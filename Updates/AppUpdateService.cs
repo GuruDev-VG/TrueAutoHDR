@@ -118,7 +118,14 @@ public sealed class AppUpdateService
             if (!download.Success)
                 return (false, download.Message);
 
-            var actual = Convert.ToHexString(await SHA256.HashDataAsync(File.OpenRead(zipPath), ct)).ToLowerInvariant();
+            string actual;
+            await using (var hashStream = File.OpenRead(zipPath))
+            {
+                actual = Convert.ToHexString(
+                    await SHA256.HashDataAsync(hashStream, ct)
+                ).ToLowerInvariant();
+            }
+
             if (!actual.Equals(NormalizeHash(update.Sha256), StringComparison.OrdinalIgnoreCase))
             {
                 File.Delete(zipPath);
