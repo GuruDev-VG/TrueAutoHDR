@@ -2,6 +2,6 @@
     "version":  "1.3.2",
     "releaseType":  "Stable",
     "packageUrl":  "https://github.com/GuruDev-VG/TrueAutoHDR/releases/download/v1.3.2/TrueAutoHDR-update-1.3.2.zip",
-    "sha256":  "1aae8512458cdeb9eb9838b1c00179b342db94967418bd12f0164b12a6179008",
+    "sha256":  "c6182dddf27750418876443f732bd9387dfd4e76feaff258ad83be15a95d90fa",
     "notes":  "TrueAuto HDR 1.3.2: close-window choice dialog with optional remembered behavior."
 }
