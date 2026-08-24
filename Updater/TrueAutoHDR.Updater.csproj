@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>TrueAutoHDR.Updater</AssemblyName>
+    <RootNamespace>TrueAutoHDR.Updater</RootNamespace>
+    <Version>1.2.3</Version>
+    <Company>VG Prod.</Company>
+    <Product>TrueAuto HDR Updater</Product>
+  </PropertyGroup>
+</Project>

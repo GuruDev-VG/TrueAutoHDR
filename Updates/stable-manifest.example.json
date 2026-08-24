@@ -1,0 +1,7 @@
+{
+  "version": "1.2.1",
+  "releaseType": "Hotfix",
+  "packageUrl": "https://example.com/TrueAutoHDR-update-1.2.1.zip",
+  "sha256": "REPLACE_WITH_SHA256",
+  "notes": "Example stable/hotfix manifest."
+}

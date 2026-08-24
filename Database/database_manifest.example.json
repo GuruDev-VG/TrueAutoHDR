@@ -1,0 +1,5 @@
+{
+  "version": "2026.08.24.1",
+  "databaseUrl": "https://example.com/trueautohdr/native_hdr_database.json",
+  "sha256": "OPTIONAL_SHA256_OF_DATABASE_FILE"
+}
