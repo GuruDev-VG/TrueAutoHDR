@@ -1,7 +1,7 @@
 ﻿{
-    "version":  "1.4.0",
+    "version":  "1.4.1",
     "releaseType":  "Stable",
-    "packageUrl":  "https://github.com/GuruDev-VG/TrueAutoHDR/releases/download/v1.4.0/TrueAutoHDR-update-1.4.0.zip",
-    "sha256":  "7c4b658917177ef1777adaf9a5d84fc1e64b057206dab8b3634723e79885fe1c",
-    "notes":  "TrueAuto HDR 1.4.0 Stable update."
+    "packageUrl":  "https://github.com/GuruDev-VG/TrueAutoHDR/releases/download/v1.4.1/TrueAutoHDR-update-1.4.1.zip",
+    "sha256":  "542ba60a73c9c89d0dd33894c46c8e5072803e88a9230eae4a95de396ef7365e",
+    "notes":  "TrueAuto HDR 1.4.1 Stable update."
 }
