@@ -1,7 +1,7 @@
-{
-  "version": "1.2.3",
-  "releaseType": "Canary",
-  "packageUrl": "",
-  "sha256": "",
-  "notes": "TrueAuto HDR Canary channel. No Canary build is currently published."
+﻿{
+    "version":  "1.4.0.1",
+    "releaseType":  "Canary",
+    "packageUrl":  "https://github.com/GuruDev-VG/TrueAutoHDR/releases/download/v1.4.0.1/TrueAutoHDR-update-1.4.0.1.zip",
+    "sha256":  "d3816c171a3786c2216ae90de1839efccc42aa948a712b678a7626f9987e6c04",
+    "notes":  "TrueAuto HDR 1.4.0.1 Canary: preview update for Canary channel testing."
 }
