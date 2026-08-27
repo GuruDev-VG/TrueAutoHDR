@@ -1,7 +1,7 @@
 ﻿{
-    "version":  "1.3.2",
+    "version":  "1.4.0",
     "releaseType":  "Stable",
-    "packageUrl":  "https://github.com/GuruDev-VG/TrueAutoHDR/releases/download/v1.3.2/TrueAutoHDR-update-1.3.2.zip",
-    "sha256":  "c6182dddf27750418876443f732bd9387dfd4e76feaff258ad83be15a95d90fa",
-    "notes":  "TrueAuto HDR 1.3.2: close-window choice dialog with optional remembered behavior."
+    "packageUrl":  "https://github.com/GuruDev-VG/TrueAutoHDR/releases/download/v1.4.0/TrueAutoHDR-update-1.4.0.zip",
+    "sha256":  "c593dae1f379b19b1b734e0eacec7a6858495275f757b7425cd0a24a5051d106",
+    "notes":  "TrueAuto HDR 1.4.0: HDR10+ Gaming metadata and optional per-game display recovery."
 }
