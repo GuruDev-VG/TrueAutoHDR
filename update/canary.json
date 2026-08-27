@@ -1,7 +1,7 @@
 ﻿{
-    "version":  "1.4.0.1",
+    "version":  "1.4.1.1",
     "releaseType":  "Canary",
-    "packageUrl":  "https://github.com/GuruDev-VG/TrueAutoHDR/releases/download/v1.4.0.1/TrueAutoHDR-update-1.4.0.1.zip",
-    "sha256":  "d3816c171a3786c2216ae90de1839efccc42aa948a712b678a7626f9987e6c04",
-    "notes":  "TrueAuto HDR 1.4.0.1 Canary: preview update for Canary channel testing."
+    "packageUrl":  "https://github.com/GuruDev-VG/TrueAutoHDR/releases/download/v1.4.1.1/TrueAutoHDR-update-1.4.1.1.zip",
+    "sha256":  "0fb34aea3b48d1eb186e75ad10e2db35e308f3a60748e0375e4d05656eda18f2",
+    "notes":  "TrueAuto HDR 1.4.1.1 Canary: read-only RenoDX and Special K HDR Mod Discovery."
 }
