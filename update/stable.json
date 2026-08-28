@@ -1,7 +1,7 @@
 ﻿{
-    "version":  "1.5.0",
+    "version":  "1.5.1",
     "releaseType":  "Stable",
-    "packageUrl":  "https://github.com/GuruDev-VG/TrueAutoHDR/releases/download/v1.5.0/TrueAutoHDR-update-1.5.0.zip",
-    "sha256":  "0e2c40e2def9a8ee0326749659eb2fe773999405c8b07a181d503c83b66a6e7d",
-    "notes":  "TrueAuto HDR 1.5.0 Stable: HDR10+ Gaming, display recovery, redesigned Game Manager, and Steam artwork cache."
+    "packageUrl":  "https://github.com/GuruDev-VG/TrueAutoHDR/releases/download/v1.5.1/TrueAutoHDR-update-1.5.1.zip",
+    "sha256":  "d676715748562c970fd4ca9fa58cd911616b09a403c06a3e0f166a9deaf27717",
+    "notes":  "TrueAuto HDR 1.5.1 Stable: HDR10+ Gaming, display recovery, redesigned Game Manager, and Steam artwork cache."
 }
