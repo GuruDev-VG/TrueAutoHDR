@@ -1,4 +1,4 @@
-using AutoHDR.Database;
+﻿using AutoHDR.Database;
 using AutoHDR.GameWatcher;
 using AutoHDR.HDR;
 using AutoHDR.UI;
@@ -70,7 +70,7 @@ internal static class Program
         Directory.CreateDirectory(appData);
 
         var logger = new FileLogger(Path.Combine(appData, "trueautohdr.log"));
-        logger.Log($"TrueAuto HDR v1.3.2 starting. mode={(portableMode ? "portable" : "installed")}, startup={startupMode}.");
+        logger.Log($"TrueAuto HDR v1.5.0 starting. mode={(portableMode ? "portable" : "installed")}, startup={startupMode}.");
 
         Application.ThreadException += (_, e) =>
             ReportFatalError(logger, "WinForms UI exception", e.Exception);
@@ -93,6 +93,7 @@ internal static class Program
         var bundledSeed = Path.Combine(AppContext.BaseDirectory, "Database", "native_hdr_database.json");
         var activeDatabase = Path.Combine(appData, "native_hdr_database.json");
         SeedDatabaseIfNeeded(bundledSeed, activeDatabase, logger);
+        MergeBundledCapabilityMetadata(bundledSeed, activeDatabase, logger);
         var database = new HdrDatabase(Path.Combine(appData, "user_hdr_games.json"), logger, activeDatabase);
         var databaseUpdater = new DatabaseUpdater(database, activeDatabase, Path.Combine(appData, "database_version.txt"), logger);
         var steam = new SteamGameDetector(logger);
@@ -154,6 +155,69 @@ internal static class Program
 
         logger.Log($"SELF-TEST PASS: version={typeof(Program).Assembly.GetName().Version}, appData={appData}");
         Environment.ExitCode = 0;
+    }
+
+
+    private static void MergeBundledCapabilityMetadata(string seed, string active, FileLogger logger)
+    {
+        try
+        {
+            if (!File.Exists(seed) || !File.Exists(active)) return;
+            var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var seedData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, AutoHDR.Models.HdrGame>>(File.ReadAllText(seed), options) ?? new();
+            var activeData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, AutoHDR.Models.HdrGame>>(File.ReadAllText(active), options) ?? new();
+            var changed = false;
+
+            foreach (var pair in seedData.Where(p => p.Value.Hdr10PlusGaming))
+            {
+                AutoHDR.Models.HdrGame? target = null;
+                string? targetKey = null;
+                if (activeData.TryGetValue(pair.Key, out var exact))
+                {
+                    target = exact; targetKey = pair.Key;
+                }
+                else
+                {
+                    var normalized = AutoHDR.Database.GameIdentityMatcher.Normalize(pair.Value.Name);
+                    var match = activeData.FirstOrDefault(p => AutoHDR.Database.GameIdentityMatcher.Normalize(p.Value.Name) == normalized);
+                    if (!string.IsNullOrWhiteSpace(match.Key)) { target = match.Value; targetKey = match.Key; }
+                }
+
+                if (target is null)
+                {
+                    activeData[pair.Key] = pair.Value;
+                    changed = true;
+                    continue;
+                }
+
+                if (!target.Hdr10PlusGaming || target.Hdr10PlusSource != pair.Value.Hdr10PlusSource)
+                {
+                    target.Hdr10PlusGaming = true;
+                    target.Hdr10PlusSource = pair.Value.Hdr10PlusSource;
+                    changed = true;
+                }
+                if (pair.Value.Aliases is { Count: > 0 })
+                {
+                    target.Aliases ??= new List<string>();
+                    foreach (var alias in pair.Value.Aliases)
+                        if (!target.Aliases.Contains(alias, StringComparer.OrdinalIgnoreCase)) { target.Aliases.Add(alias); changed = true; }
+                }
+                if (targetKey is not null) activeData[targetKey] = target;
+            }
+
+            if (!changed) return;
+            var temp = active + ".capabilities.tmp";
+            File.WriteAllText(temp, System.Text.Json.JsonSerializer.Serialize(activeData, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            File.Move(temp, active, true);
+            logger.Log("Merged bundled HDR10+ Gaming capability metadata into the active HDR database.");
+        }
+        catch (Exception ex)
+        {
+            // Capability metadata is supplemental. Never block startup if a local
+            // database is malformed or locked; the normal database loader will
+            // report its own error/fallback behavior.
+            logger.Log($"Could not merge bundled HDR10+ capability metadata: {ex.Message}");
+        }
     }
 
     private static void ReportFatalError(FileLogger logger, string context, Exception ex, bool showDialog = true)

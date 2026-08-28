@@ -3,6 +3,13 @@ using AutoHDR.Models;
 
 namespace AutoHDR.Rules;
 
+public enum DisplayRecoveryMode
+{
+    Off = 0,
+    ReapplyCurrentMode = 1,
+    ForceRefreshRateReset = 2
+}
+
 public sealed class GameRule
 {
     // All values default to old behavior, so simply having the rules system
@@ -11,6 +18,7 @@ public sealed class GameRule
     public int ExitGraceMs { get; set; }
     public bool KeepHdrAfterExit { get; set; }
     public string DisplayDeviceName { get; set; } = "";
+    public DisplayRecoveryMode DisplayRecovery { get; set; } = DisplayRecoveryMode.Off;
 }
 
 public sealed class GameRuleStore
@@ -35,7 +43,8 @@ public sealed class GameRuleStore
                     EnableDelayMs = rule.EnableDelayMs,
                     ExitGraceMs = rule.ExitGraceMs,
                     KeepHdrAfterExit = rule.KeepHdrAfterExit,
-                    DisplayDeviceName = rule.DisplayDeviceName ?? ""
+                    DisplayDeviceName = rule.DisplayDeviceName ?? "",
+                    DisplayRecovery = rule.DisplayRecovery
                 }
                 : new GameRule();
     }
@@ -49,7 +58,8 @@ public sealed class GameRuleStore
         {
             rule.DisplayDeviceName = (rule.DisplayDeviceName ?? "").Trim();
             if (rule.EnableDelayMs == 0 && rule.ExitGraceMs == 0 &&
-                !rule.KeepHdrAfterExit && string.IsNullOrWhiteSpace(rule.DisplayDeviceName))
+                !rule.KeepHdrAfterExit && string.IsNullOrWhiteSpace(rule.DisplayDeviceName) &&
+                rule.DisplayRecovery == DisplayRecoveryMode.Off)
                 _rules.Remove(game.Key);
             else
                 _rules[game.Key] = rule;

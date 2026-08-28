@@ -1,19 +1,19 @@
-using Microsoft.Win32;
+﻿using Microsoft.Win32;
 using System.Runtime.InteropServices;
 
 namespace AutoHDR.UI;
 
 public static class ThemeManager
 {
-    private static readonly Color DarkBackground = Color.FromArgb(15, 18, 22);
-    private static readonly Color DarkHeader = Color.FromArgb(18, 22, 27);
-    private static readonly Color DarkSurface = Color.FromArgb(24, 29, 35);
-    private static readonly Color DarkCard = Color.FromArgb(27, 33, 40);
-    private static readonly Color DarkCardHover = Color.FromArgb(34, 41, 49);
-    private static readonly Color DarkInput = Color.FromArgb(31, 37, 44);
-    private static readonly Color DarkText = Color.FromArgb(240, 242, 245);
-    private static readonly Color DarkMuted = Color.FromArgb(173, 181, 190);
-    private static readonly Color DarkGrid = Color.FromArgb(55, 63, 72);
+    private static readonly Color DarkBackground = Color.FromArgb(8, 15, 24);
+    private static readonly Color DarkHeader = Color.FromArgb(7, 13, 22);
+    private static readonly Color DarkSurface = Color.FromArgb(14, 22, 31);
+    private static readonly Color DarkCard = Color.FromArgb(17, 24, 33);
+    private static readonly Color DarkCardHover = Color.FromArgb(25, 35, 46);
+    private static readonly Color DarkInput = Color.FromArgb(20, 29, 39);
+    private static readonly Color DarkText = Color.FromArgb(238, 242, 247);
+    private static readonly Color DarkMuted = Color.FromArgb(166, 177, 190);
+    private static readonly Color DarkGrid = Color.FromArgb(38, 50, 63);
 
     private static readonly Color LightBackground = Color.FromArgb(246, 247, 249);
     private static readonly Color LightHeader = Color.White;
@@ -110,6 +110,31 @@ public static class ThemeManager
             control.BackColor = dark ? DarkHeader : LightHeader;
             control.ForeColor = dark ? DarkText : SystemColors.ControlText;
         }
+        else if (tag is "modern-surface-layout" or "metric-strip")
+        {
+            control.BackColor = dark ? Color.FromArgb(14, 22, 31) : LightSurface;
+            control.ForeColor = dark ? DarkText : SystemColors.ControlText;
+        }
+        else if (tag == "transparent-layout")
+        {
+            control.BackColor = Color.Transparent;
+            control.ForeColor = dark ? DarkText : SystemColors.ControlText;
+        }
+        else if (tag == "status-divider")
+        {
+            control.BackColor = dark ? Color.FromArgb(49, 60, 73) : Color.FromArgb(210, 218, 226);
+            control.ForeColor = control.BackColor;
+        }
+        else if (tag == "modern-card-layout")
+        {
+            control.BackColor = dark ? Color.FromArgb(17, 24, 33) : LightCard;
+            control.ForeColor = dark ? DarkText : SystemColors.ControlText;
+        }
+        else if (tag == "modern-footer-layout")
+        {
+            control.BackColor = dark ? Color.FromArgb(13, 20, 29) : LightSurface;
+            control.ForeColor = dark ? DarkText : SystemColors.ControlText;
+        }
         else if (tag == "section-layout")
         {
             // Avoid Transparent TableLayoutPanels: WinForms can leave stale paint
@@ -129,10 +154,41 @@ public static class ThemeManager
             control.BackColor = dark ? DarkBackground : LightBackground;
             control.ForeColor = dark ? DarkText : SystemColors.ControlText;
         }
-        else if (tag == "section")
+        else if (tag is "section" or "selected-card")
         {
             control.BackColor = dark ? DarkSurface : LightSurface;
             control.ForeColor = dark ? DarkText : SystemColors.ControlText;
+        }
+        else if (tag is "artwork-host" or "artwork")
+        {
+            control.BackColor = dark ? Color.FromArgb(20, 24, 30) : Color.FromArgb(235, 238, 242);
+            control.ForeColor = dark ? DarkMuted : LightMuted;
+        }
+        else if (tag == "primary-button" && control is Button primary)
+        {
+            primary.UseVisualStyleBackColor = false;
+            primary.FlatStyle = FlatStyle.Flat;
+            primary.BackColor = dark ? Color.FromArgb(111, 58, 190) : Color.FromArgb(117, 67, 196);
+            primary.ForeColor = Color.White;
+            primary.FlatAppearance.BorderColor = dark ? Color.FromArgb(145, 86, 232) : Color.FromArgb(100, 54, 175);
+            primary.FlatAppearance.MouseOverBackColor = dark ? Color.FromArgb(130, 72, 212) : Color.FromArgb(105, 59, 184);
+        }
+        else if (tag.EndsWith("-badge", StringComparison.Ordinal) && control is Label badge)
+        {
+            badge.BackColor = tag switch
+            {
+                "positive-badge" => dark ? Color.FromArgb(37, 79, 56) : Color.FromArgb(220, 244, 226),
+                "negative-badge" => dark ? Color.FromArgb(83, 44, 44) : Color.FromArgb(250, 226, 226),
+                "hdr10-badge" => dark ? Color.FromArgb(67, 42, 100) : Color.FromArgb(237, 225, 250),
+                _ => dark ? Color.FromArgb(42, 48, 56) : Color.FromArgb(232, 235, 239)
+            };
+            badge.ForeColor = tag switch
+            {
+                "positive-badge" => Accent("green", dark),
+                "negative-badge" => dark ? Color.FromArgb(245, 145, 145) : Color.FromArgb(165, 44, 44),
+                "hdr10-badge" => Accent("purple", dark),
+                _ => dark ? DarkMuted : LightMuted
+            };
         }
         else if (tag.StartsWith("action-card:", StringComparison.Ordinal))
         {
@@ -150,10 +206,26 @@ public static class ThemeManager
             control.BackColor = Color.Transparent;
             control.ForeColor = Accent("purple", dark);
         }
+        else if (tag == "footer-heading-opaque")
+        {
+            control.BackColor = dark ? Color.FromArgb(13, 20, 29) : LightSurface;
+            control.ForeColor = dark ? Color.FromArgb(184, 194, 207) : Color.FromArgb(82, 92, 104);
+        }
+        else if (tag == "footer-heading")
+        {
+            control.BackColor = Color.Transparent;
+            control.ForeColor = dark ? Color.FromArgb(184, 194, 207) : Color.FromArgb(82, 92, 104);
+        }
         else if (tag == "muted")
         {
             control.BackColor = Color.Transparent;
             control.ForeColor = dark ? DarkMuted : LightMuted;
+        }
+        else if (tag == "modern-search-inner" && control is TextBox searchInner)
+        {
+            searchInner.BackColor = dark ? Color.FromArgb(20, 29, 39) : Color.White;
+            searchInner.ForeColor = dark ? DarkText : SystemColors.WindowText;
+            searchInner.BorderStyle = BorderStyle.None;
         }
         else
         {

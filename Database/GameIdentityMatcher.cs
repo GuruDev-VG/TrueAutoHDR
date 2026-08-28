@@ -39,7 +39,7 @@ public static class GameIdentityMatcher
         "directors cut", "director cut", "enhanced edition", "complete edition",
         "ultimate edition", "deluxe edition", "standard edition", "definitive edition",
         "game of the year edition", "goty edition", "digital deluxe", "premium edition",
-        "windows edition", "pc edition"
+        "windows edition", "pc edition", "enhanced", "beta", "open beta", "demo", "trial"
     };
 
     public static string Normalize(string value)
@@ -57,6 +57,17 @@ public static class GameIdentityMatcher
             normalized = Regex.Replace(normalized, $@"\b{Regex.Escape(noise)}\b", " ", RegexOptions.IgnoreCase);
 
         normalized = Regex.Replace(normalized, @"\b(?:steam|epic|gog|xbox|game pass|ubisoft connect|rockstar|ea app)\b", " ", RegexOptions.IgnoreCase);
+        return Regex.Replace(normalized.Trim(), @"\s+", " ");
+    }
+
+
+    public static string CanonicalizeSafeVariant(string value)
+    {
+        var normalized = Normalize(value);
+        // Only strip well-known non-identity suffixes/labels. This path is used
+        // for automatic inheritance, so keep it deliberately conservative.
+        normalized = Regex.Replace(normalized, @"\b(?:open beta|beta|enhanced|demo|trial)\b$", " ", RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\b(?:standard|deluxe|ultimate|complete|definitive|enhanced) edition\b$", " ", RegexOptions.IgnoreCase);
         return Regex.Replace(normalized.Trim(), @"\s+", " ");
     }
 

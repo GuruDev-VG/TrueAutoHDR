@@ -1,4 +1,4 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text.Json;
 using AutoHDR.Models;
@@ -29,7 +29,7 @@ public sealed class DatabaseUpdater
         _versionPath = versionPath;
         _logger = logger;
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("TrueAutoHDR", "1.3.2"));
+        _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("TrueAutoHDR", "1.5.0"));
     }
 
     public string CurrentVersion

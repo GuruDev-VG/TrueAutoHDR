@@ -1,11 +1,11 @@
-@echo off
+﻿@echo off
 setlocal EnableExtensions
 set TRUEAUTOHDR_NO_PAUSE=1
 cd /d "%~dp0"
-title TrueAuto HDR 1.3.2 - Release Builder
+title TrueAuto HDR 1.5.0 - Release Builder
 
 echo ========================================
-echo   TrueAuto HDR 1.3.2 Release Builder
+echo   TrueAuto HDR 1.5.0 Release Builder
 echo ========================================
 echo.
 
@@ -30,9 +30,9 @@ echo ========================================
 echo RELEASE BUILD COMPLETE
 echo ========================================
 echo Portable:
-echo   release\Portable\TrueAutoHDR-1.3.2-Portable.zip
+echo   release\Portable\TrueAutoHDR-1.5.0-Portable.zip
 echo Installer:
-echo   release\Installer\TrueAutoHDR-1.3.2-Setup.exe
+echo   release\Installer\TrueAutoHDR-1.5.0-Setup.exe
 echo.
 pause
 exit /b 0

@@ -1,214 +1,98 @@
-param(
+﻿param(
     [string]$RepoOwner = "GuruDev-VG",
     [string]$RepoName = "TrueAutoHDR",
-    [string]$Version = "1.3.2"
+    [string]$Version = "1.5.0",
+    [ValidateSet("Stable","Canary")][string]$Channel = "Stable"
 )
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$payload = Join-Path $root "update-payload"
-$out = Join-Path $root "UpdatePackages"
-$updaterOut = Join-Path $root "publish-updater"
-$log = Join-Path $root "MakeAppUpdatePackage.log"
+$channelName = if ($Channel -eq "Canary") { "Canary" } else { "Stable" }
+$manifestName = if ($Channel -eq "Canary") { "canary.json" } else { "stable.json" }
+$out = Join-Path $root ("UpdatePackages\" + $channelName)
+$payload = Join-Path $root ("update-payload-" + $channelName.ToLowerInvariant())
+$updaterOut = Join-Path $root ("publish-updater-" + $channelName.ToLowerInvariant())
+$log = Join-Path $root ("MakeAppUpdatePackage-" + $channelName.ToLowerInvariant() + ".log")
 
 function Stop-WithError([string]$Message) {
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Red
-    Write-Host "UPDATE PACKAGE BUILD FAILED" -ForegroundColor Red
-    Write-Host "========================================" -ForegroundColor Red
-    Write-Host $Message -ForegroundColor Red
-    Write-Host ""
-    Write-Host "Log:"
-    Write-Host "  $log"
+    Write-Host ""; Write-Host "UPDATE PACKAGE BUILD FAILED" -ForegroundColor Red; Write-Host $Message -ForegroundColor Red
     throw $Message
 }
 
 try {
     if (Test-Path $log) { Remove-Item $log -Force }
     Start-Transcript -Path $log -Force | Out-Null
+    if ($null -eq (Get-Command dotnet -ErrorAction SilentlyContinue)) { Stop-WithError ".NET SDK was not found in PATH." }
 
-    Write-Host "========================================"
-    Write-Host " TrueAuto HDR $Version App Update Package"
-    Write-Host "========================================"
-    Write-Host ""
-
-    $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
-    if ($null -eq $dotnet) {
-        Stop-WithError ".NET SDK was not found in PATH."
-    }
-
-    Write-Host "Using .NET:"
-    & dotnet --version
-    if ($LASTEXITCODE -ne 0) {
-        Stop-WithError "dotnet --version failed."
+    # Isolation rule: only this channel's output directory is cleaned. A Canary
+    # build never touches UpdatePackages\Stable or stable.json, and vice versa.
+    foreach ($folder in @($payload, $out, $updaterOut)) {
+        if (Test-Path $folder) { Remove-Item $folder -Recurse -Force }
+        New-Item -ItemType Directory -Force -Path $folder | Out-Null
     }
 
     $mainProject = Join-Path $root "AutoHDR.csproj"
     $updaterProject = Join-Path $root "Updater\TrueAutoHDR.Updater.csproj"
 
-    if (-not (Test-Path $mainProject)) {
-        Stop-WithError "AutoHDR.csproj was not found: $mainProject"
-    }
-    if (-not (Test-Path $updaterProject)) {
-        Stop-WithError "Updater project was not found: $updaterProject"
-    }
+    $channelDefine = if ($Channel -eq "Canary") { "CANARY" } else { "STABLE" }
 
-    foreach ($folder in @($payload, $out, $updaterOut)) {
-        if (Test-Path $folder) {
-            Remove-Item $folder -Recurse -Force
-        }
-        New-Item -ItemType Directory -Force -Path $folder | Out-Null
-    }
+    Write-Host "[1/7] Building updater ($Channel)..."
+    & dotnet publish $updaterProject -c Release -r win-x64 --self-contained true `
+        "-p:Version=$Version" "-p:DefineConstants=$channelDefine" `
+        "-p:PublishSingleFile=true" "-p:DebugType=None" "-p:DebugSymbols=false" -o $updaterOut
+    if ($LASTEXITCODE -ne 0) { Stop-WithError "Updater build failed." }
 
-    Write-Host ""
-    Write-Host "[1/6] Building self-contained updater..."
-    & dotnet publish $updaterProject `
-        -c Release `
-        -r win-x64 `
-        --self-contained true `
-        "-p:PublishSingleFile=true" `
-        "-p:DebugType=None" `
-        "-p:DebugSymbols=false" `
-        -o $updaterOut
+    Write-Host "[2/7] Building TrueAuto HDR $Version..."
+    & dotnet publish $mainProject -c Release -r win-x64 --self-contained true `
+        "-p:Version=$Version" "-p:DefineConstants=$channelDefine" `
+        "-p:PublishSingleFile=true" "-p:PublishReadyToRun=true" "-p:DebugType=None" "-p:DebugSymbols=false" -o $payload
+    if ($LASTEXITCODE -ne 0) { Stop-WithError "Main application build failed." }
 
-    if ($LASTEXITCODE -ne 0) {
-        Stop-WithError "Updater build failed with exit code $LASTEXITCODE."
+    Copy-Item (Join-Path $updaterOut "TrueAutoHDR.Updater.exe") (Join-Path $payload "TrueAutoHDR.Updater.exe") -Force
+    foreach ($required in @("TrueAutoHDR.exe","TrueAutoHDR.Updater.exe","Database\native_hdr_database.json","Database\community_hdr_names.json")) {
+        if (-not (Test-Path (Join-Path $payload $required))) { Stop-WithError "Required payload file missing: $required" }
     }
 
-    $updaterExe = Join-Path $updaterOut "TrueAutoHDR.Updater.exe"
-    if (-not (Test-Path $updaterExe)) {
-        Stop-WithError "Updater build completed but TrueAutoHDR.Updater.exe is missing."
-    }
-
-    Write-Host ""
-    Write-Host "[2/6] Building TrueAuto HDR $Version payload..."
-    & dotnet publish $mainProject `
-        -c Release `
-        -r win-x64 `
-        --self-contained true `
-        "-p:PublishSingleFile=true" `
-        "-p:PublishReadyToRun=true" `
-        "-p:DebugType=None" `
-        "-p:DebugSymbols=false" `
-        -o $payload
-
-    if ($LASTEXITCODE -ne 0) {
-        Stop-WithError "Main application build failed with exit code $LASTEXITCODE."
-    }
-
-    $mainExe = Join-Path $payload "TrueAutoHDR.exe"
-    if (-not (Test-Path $mainExe)) {
-        Stop-WithError "Main build completed but TrueAutoHDR.exe is missing."
-    }
-
-    Write-Host ""
-    Write-Host "[3/6] Adding updater to payload..."
-    Copy-Item $updaterExe (Join-Path $payload "TrueAutoHDR.Updater.exe") -Force
-
-    $requiredFiles = @(
-        (Join-Path $payload "TrueAutoHDR.exe"),
-        (Join-Path $payload "TrueAutoHDR.Updater.exe"),
-        (Join-Path $payload "Database\native_hdr_database.json"),
-        (Join-Path $payload "Database\community_hdr_names.json")
-    )
-
-    foreach ($required in $requiredFiles) {
-        if (-not (Test-Path $required)) {
-            Stop-WithError "Required update payload file is missing: $required"
-        }
-    }
-
-    Write-Host ""
-    Write-Host "[4/7] Optional code signing..."
+    Write-Host "[3/7] Optional signing..."
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "SignRelease.ps1") -Path $payload
     if ($LASTEXITCODE -ne 0) { Stop-WithError "Code signing step failed." }
 
-    Write-Host ""
-    Write-Host "[5/7] Running built-in self-test..."
-    $selfTest = Start-Process `
-        -FilePath $mainExe `
-        -ArgumentList "--self-test" `
-        -WorkingDirectory $payload `
-        -Wait `
-        -PassThru
+    Write-Host "[4/7] Self-test..."
+    $selfTest = Start-Process -FilePath (Join-Path $payload "TrueAutoHDR.exe") -ArgumentList "--self-test" -WorkingDirectory $payload -Wait -PassThru
+    if ($selfTest.ExitCode -ne 0) { Stop-WithError "Self-test failed with exit code $($selfTest.ExitCode)." }
 
-    if ($selfTest.ExitCode -ne 0) {
-        Stop-WithError "TrueAutoHDR.exe --self-test failed with exit code $($selfTest.ExitCode)."
-    }
-
-    Write-Host "Self-test passed."
-
-    Write-Host ""
-    Write-Host "[6/7] Creating update ZIP..."
+    Write-Host "[5/7] Creating package..."
     $zipName = "TrueAutoHDR-update-$Version.zip"
     $zipPath = Join-Path $out $zipName
+    Compress-Archive -Path (Join-Path $payload "*") -DestinationPath $zipPath -CompressionLevel Optimal -Force
 
-    if (Test-Path $zipPath) {
-        Remove-Item $zipPath -Force
-    }
-
-    Compress-Archive `
-        -Path (Join-Path $payload "*") `
-        -DestinationPath $zipPath `
-        -CompressionLevel Optimal `
-        -Force
-
-    if (-not (Test-Path $zipPath)) {
-        Stop-WithError "Compress-Archive did not create the update ZIP."
-    }
-
-    Write-Host ""
-    Write-Host "[7/7] Creating GitHub Stable manifest..."
+    Write-Host "[6/7] Hashing package..."
     $sha256 = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    $shaPath = Join-Path $out "$zipName.sha256"
-    "$sha256  $zipName" | Set-Content -Path $shaPath -Encoding ASCII
+    "$sha256  $zipName" | Set-Content -Path (Join-Path $out "$zipName.sha256") -Encoding ASCII
+
+    Write-Host "[7/7] Writing isolated $Channel manifest..."
     $tag = "v$Version"
     $packageUrl = "https://github.com/$RepoOwner/$RepoName/releases/download/$tag/$zipName"
-
     $manifest = [ordered]@{
         version = $Version
-        releaseType = "Stable"
+        releaseType = $Channel
         packageUrl = $packageUrl
         sha256 = $sha256
-        notes = "TrueAuto HDR 1.3.2: close-window choice dialog with optional remembered behavior."
+        notes = if ($Channel -eq "Canary") { "TrueAuto HDR $Version Canary: experimental feature channel." } else { "TrueAuto HDR $Version Stable: HDR10+ Gaming, display recovery, redesigned Game Manager, and Steam artwork cache." }
     }
+    $manifestPath = Join-Path $out $manifestName
+    $manifest | ConvertTo-Json | Out-File -FilePath $manifestPath -Encoding utf8 -Force
 
-    $manifestPath = Join-Path $out "stable.json"
-    $manifest | ConvertTo-Json | Out-File `
-        -FilePath $manifestPath `
-        -Encoding utf8 `
-        -Force
-
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Green
-    Write-Host "UPDATE PACKAGE BUILD COMPLETE" -ForegroundColor Green
-    Write-Host "========================================" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "GitHub Release asset:"
-    Write-Host "  $zipPath"
-    Write-Host ""
-    Write-Host "Repository manifest to upload AFTER the release asset:"
-    Write-Host "  $manifestPath"
-    Write-Host ""
-    Write-Host "Package URL:"
-    Write-Host "  $packageUrl"
-    Write-Host ""
-    Write-Host "SHA-256:"
-    Write-Host "  $sha256"
-    Write-Host ""
-    Write-Host "Full build log:"
-    Write-Host "  $log"
-
+    Write-Host ""; Write-Host "$Channel update package complete." -ForegroundColor Green
+    Write-Host "Package:  $zipPath"
+    Write-Host "Manifest: $manifestPath"
+    Write-Host "SHA-256:  $sha256"
     Stop-Transcript | Out-Null
     exit 0
 }
 catch {
     try { Stop-Transcript | Out-Null } catch {}
-    Write-Host ""
     Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "The window will remain open when launched with BuildStableTestUpdate.bat."
     exit 1
 }

@@ -1,10 +1,11 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using AutoHDR.Database;
 using AutoHDR.GameWatcher;
 using AutoHDR.Updates;
 using AutoHDR.Rules;
 using AutoHDR.Diagnostics;
 using AutoHDR.Models;
+using AutoHDR.Mods;
 
 namespace AutoHDR.UI;
 
@@ -23,11 +24,27 @@ public sealed class GameManagerForm : Form
     private readonly AppUpdateService _appUpdates;
     private readonly GameRuleStore _rules;
     private readonly DiagnosticsService _diagnostics;
+    private readonly SteamArtworkService _artwork;
+#if CANARY
+    private readonly HdrModDiscoveryService _hdrMods;
+#endif
+
     private readonly DataGridView _grid = new();
-    private readonly TextBox _search = new();
+    private readonly ModernSearchBox _search = new();
     private readonly Label _summary = new();
     private readonly Label _scanStatus = new();
     private readonly SlickProgressBar _scanProgress = new();
+    private readonly ArtworkBox _cover = new();
+    private readonly Label _selectedTitle = new();
+    private readonly PillLabel _selectedStore = new();
+    private readonly PillLabel _nativeHdrBadge = new();
+    private readonly PillLabel _hdr10Badge = new();
+    private readonly ModernButton _overrideAuto = new();
+    private readonly ModernButton _overrideHdr = new();
+    private readonly ModernButton _overrideSdr = new();
+    private readonly MetricStrip _metrics = new();
+    private CancellationTokenSource? _artworkCts;
+    private DateTime? _lastScanUtc;
     private List<InstalledGame> _installed = new();
     private readonly Dictionary<string, string> _sourceHints = new(StringComparer.OrdinalIgnoreCase);
 
@@ -49,173 +66,453 @@ public sealed class GameManagerForm : Form
         _appUpdates = appUpdates;
         _rules = rules;
         _diagnostics = diagnostics;
+        _artwork = new SteamArtworkService(logger);
+#if CANARY
+        _hdrMods = new HdrModDiscoveryService(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TrueAutoHDR"), logger);
+#endif
 
-        // All layout values in this form are authored at 96 DPI.
-        // Explicit DPI scaling avoids Font autoscaling producing a different
-        // result when TrueAuto HDR starts with Windows before the desktop/DPI
-        // environment has fully settled.
         AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
-
-        // WinForms/native child controls can still paint one default system-color
-        // frame while their HWNDs are being created. Build that first frame fully
-        // transparent, then reveal the finished themed form on the next UI cycle.
         Opacity = 0d;
         DoubleBuffered = true;
-        SetStyle(ControlStyles.AllPaintingInWmPaint |
-                 ControlStyles.OptimizedDoubleBuffer, true);
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
         UpdateStyles();
 
-        Text = "TrueAuto HDR 1.3.2 — Game Manager";
+        Text = $"TrueAuto HDR {Application.ProductVersion} — Game Manager";
         Icon = AppIcon.Create();
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(1040, 700);
-        ClientSize = new Size(1320, 820);
+        MinimumSize = new Size(1180, 720);
+        ClientSize = new Size(1640, 940);
         Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
 
-        _search.Width = 360;
-        _search.PlaceholderText = "Search installed games…";
-        _search.TextChanged += (_, _) => Populate();
-
-        var settingsButton = CreateToolbarButton("⚙  Settings", (_, _) => ShowSettings());
-        settingsButton.Name = "settingsButton";
-
-        var refreshButton = CreateToolbarButton("↻  Refresh Games", async (sender, _) =>
-        {
-            if (sender is Button button) button.Enabled = false;
-            _scanStatus.Text = "Refreshing installed games…";
-            _scanProgress.StartIndeterminate();
-            try
-            {
-                _installed = await Task.Run(() => _games.GetInstalledGames(true).ToList());
-                ScanCommunityNames();
-                Populate();
-                _scanStatus.Text = "Installed games refreshed.";
-            }
-            catch (Exception ex)
-            {
-                _logger.Log($"Manual game refresh failed: {ex.Message}");
-                _scanStatus.Text = "Game refresh failed. See log for details.";
-            }
-            finally
-            {
-                _scanProgress.StopAndHide();
-                if (sender is Button refresh) refresh.Enabled = true;
-            }
-        });
+        var settingsButton = CreateModernButton("⚙  Settings", "secondary", (_, _) => ShowSettings());
+        settingsButton.Width = 112;
+        settingsButton.Height = 44;
 
         var title = new Label
         {
             Text = "Game Manager",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 16F, FontStyle.Bold),
-            Margin = new Padding(0, 0, 0, 2),
-            Tag = "header-title"
+            Font = new Font("Segoe UI Semibold", 18F, FontStyle.Bold),
+            Tag = "header-title",
+            Margin = new Padding(0)
         };
         var subtitle = new Label
         {
             Text = "Manage HDR detection and your local game database",
             AutoSize = true,
             Font = new Font("Segoe UI", 9.5F),
-            Tag = "muted"
+            Tag = "muted",
+            Margin = new Padding(0, 3, 0, 0)
         };
         var titleStack = new FlowLayoutPanel
         {
             FlowDirection = FlowDirection.TopDown,
             AutoSize = true,
             WrapContents = false,
-            Margin = new Padding(16, 1, 0, 0),
+            Margin = new Padding(24, 0, 0, 0),
             Tag = "header-layout"
         };
         titleStack.Controls.Add(title);
         titleStack.Controls.Add(subtitle);
 
-        var searchHost = new BufferedTableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 3,
-            RowCount = 1,
-            Margin = new Padding(0),
-            Padding = new Padding(0),
-            Tag = "header-layout"
-        };
-        searchHost.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        searchHost.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 370));
-        searchHost.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        searchHost.Controls.Add(new Panel { Dock = DockStyle.Fill, Tag = "header-layout" }, 0, 0);
+        _search.PlaceholderText = "Search installed games…";
         _search.Dock = DockStyle.Fill;
+        _search.Height = 44;
         _search.Margin = new Padding(0, 8, 10, 8);
-        searchHost.Controls.Add(_search, 1, 0);
-        refreshButton.Margin = new Padding(0, 6, 0, 6);
-        searchHost.Controls.Add(refreshButton, 2, 0);
+        _search.TextChanged += (_, _) => Populate();
+
+        var refreshGames = CreateModernButton("↻  Refresh", "secondary", async (sender, _) =>
+        {
+            if (sender is Button b) b.Enabled = false;
+            try
+            {
+                _scanStatus.Text = "Refreshing installed games…";
+                _installed = await Task.Run(() => _games.GetInstalledGames().ToList());
+                ScanCommunityNames();
+                Populate();
+                _scanStatus.Text = "";
+            }
+            catch (Exception ex)
+            {
+                _logger.Log($"Installed-game refresh failed: {ex.Message}");
+                _scanStatus.Text = "Refresh failed. See log for details.";
+            }
+            finally
+            {
+                if (sender is Button bb) bb.Enabled = true;
+            }
+        });
+        refreshGames.Width = 118;
+        refreshGames.Height = 44;
+        refreshGames.Margin = new Padding(0, 8, 0, 8);
 
         var header = new BufferedTableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 3,
+            ColumnCount = 4,
             RowCount = 1,
-            Padding = new Padding(18, 14, 18, 12),
+            Padding = new Padding(20, 13, 20, 12),
             Margin = new Padding(0),
             Tag = "header"
         };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 520));
-        settingsButton.Margin = new Padding(0, 5, 0, 5);
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 430));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+        settingsButton.Margin = new Padding(0, 8, 0, 8);
         header.Controls.Add(settingsButton, 0, 0);
         header.Controls.Add(titleStack, 1, 0);
-        header.Controls.Add(searchHost, 2, 0);
+        header.Controls.Add(_search, 2, 0);
+        header.Controls.Add(refreshGames, 3, 0);
 
-        var discovery = CreateActionSection(
-            "◎",
-            "Discover / verify",
-            "Find HDR information using community sources and storefront metadata.",
-            new[]
+        var scanLibrary = CreateModernButton("◎  Scan Library", "primary", async (sender, _) =>
+        {
+            if (sender is Button b) b.Enabled = false;
+            try
             {
-                CreateActionCard("◉", "Scan community lists", "Match installed games using RHI and HDR Gaming DB.", "purple", async (_, _) => await ScanCommunityNamesWithProgressAsync()),
-                CreateActionCard("S", "Verify selected", "Verify the selected game using its storefront or community sources.", "blue", async (_, _) => await VerifySelectedAsync()),
-                CreateActionCard("S", "Scan installed games", "Check unknown games using Steam metadata and community sources.", "green", async (_, _) => await ScanInstalledGamesAsync()),
-                CreateActionCard("↗", "Open PCGamingWiki", "Open the selected game on PCGamingWiki in your browser.", "neutral", (_, _) => OpenPcgwForSelected())
-            });
-
-        var localDb = CreateActionSection(
-            "▤",
-            "Local database",
-            "Manage local HDR decisions and import or export your database.",
-            new[]
+                _scanStatus.Text = "Scanning installed library…";
+                _scanProgress.StartIndeterminate();
+                _installed = await Task.Run(() => _games.GetInstalledGames(true).ToList());
+                ScanCommunityNames();
+                _lastScanUtc = DateTime.UtcNow;
+                Populate();
+                await ScanInstalledGamesAsync();
+                _lastScanUtc = DateTime.UtcNow;
+                UpdateMetrics();
+            }
+            catch (Exception ex)
             {
-                CreateActionCard("↓", "Check database update", "Check PCGamingWiki first, then the separately maintained TrueAuto HDR database.", "blue", async (_, _) => await UpdateDatabaseAsync()),
-                CreateActionCard("+", "Add standalone EXE", "Register a game executable that is not managed by a supported launcher.", "green", (_, _) => AddStandaloneExecutable()),
-                CreateActionCard("✓", "Mark Native HDR", "Enable automatic Windows HDR for the selected game.", "amber", async (_, _) => await MarkSelectedAsync(true)),
-                CreateActionCard("−", "Mark SDR / Disabled", "Never auto-enable HDR for the selected game.", "amber", async (_, _) => await MarkSelectedAsync(false)),
-                CreateActionCard("⏱", "Per-game rules", "Set HDR enable delay, exit grace, or keep-HDR behavior.", "purple", (_, _) => EditSelectedRules()),
-                CreateActionCard("↶", "Clear override", "Return the selected game to the bundled database decision.", "neutral", async (_, _) => await ClearOverrideAsync()),
-                CreateActionCard("⇩", "Import JSON", "Import game decisions as local user overrides.", "neutral", async (_, _) => await ImportAsync()),
-                CreateActionCard("⇧", "Export DB", "Export the merged HDR database to a JSON file.", "neutral", async (_, _) => await ExportAsync())
-            });
+                _logger.Log($"Library scan failed: {ex}");
+                _scanStatus.Text = "Library scan failed. See log for details.";
+            }
+            finally
+            {
+                _scanProgress.StopAndHide();
+                if (sender is Button bb) bb.Enabled = true;
+            }
+        });
+        scanLibrary.Width = 154;
 
-        // Use a deterministic table instead of a vertical FlowLayoutPanel here.
-        // Anchored fixed-width children inside a TopDown FlowLayoutPanel can collapse
-        // or be laid out outside the visible client area on some WinForms/DPI setups.
-        var actions = new BufferedTableLayoutPanel
+        var verify = CreateModernButton("♢  Verify Selected", "secondary", async (_, _) => await VerifySelectedAsync());
+        verify.Width = 168;
+        var refreshData = CreateModernButton("↻  Refresh HDR Data", "secondary", async (_, _) => await UpdateDatabaseAsync());
+        refreshData.Width = 190;
+        var pcgw = CreateModernButton("↗  Open PCGamingWiki", "secondary", (_, _) => OpenPcgwForSelected());
+        pcgw.Width = 204;
+
+        _metrics.Dock = DockStyle.Fill;
+        _metrics.Font = new Font("Segoe UI", 9F);
+        _metrics.Margin = new Padding(28, 0, 0, 0);
+        _metrics.Tag = "metric-strip";
+
+        var discoveryButtons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+            Tag = "modern-surface-layout"
+        };
+        foreach (var b in new[] { scanLibrary, verify, refreshData, pcgw })
+        {
+            b.Margin = new Padding(0, 0, 12, 0);
+            discoveryButtons.Controls.Add(b);
+        }
+
+        var discovery = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(20, 13, 20, 13),
+            Margin = new Padding(18, 8, 18, 8),
+            Radius = 9,
+            AccentRole = "surface",
+            Tag = "section"
+        };
+        var discoveryLayout = new BufferedTableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 2,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+            Tag = "modern-surface-layout"
+        };
+        discoveryLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 56));
+        discoveryLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44));
+        discoveryLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        discoveryLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var discoverLabel = new Label
+        {
+            Text = "DISCOVER & VERIFY",
+            AutoSize = true,
+            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Regular),
+            Tag = "muted",
+            Margin = new Padding(0)
+        };
+        discoveryLayout.Controls.Add(discoverLabel, 0, 0);
+        discoveryLayout.SetColumnSpan(discoverLabel, 2);
+        discoveryLayout.Controls.Add(discoveryButtons, 0, 1);
+        discoveryLayout.Controls.Add(_metrics, 1, 1);
+        discovery.Controls.Add(discoveryLayout);
+
+        _cover.Dock = DockStyle.Fill;
+        _cover.FillMode = ArtworkFillMode.Cover;
+        _cover.Margin = new Padding(0);
+        _cover.Tag = "artwork";
+        _cover.Paint += (_, e) =>
+        {
+            if (_cover.Image is not null) return;
+            var dark = ThemeManager.ControlIsDark(_cover);
+            using var titleFont = new Font("Segoe UI Semibold", 18F, FontStyle.Bold);
+            using var subFont = new Font("Segoe UI", 7.5F, FontStyle.Regular);
+            using var brush = new SolidBrush(ThemeManager.Accent("purple", dark));
+            using var muted = new SolidBrush(dark ? Color.FromArgb(132, 141, 151) : Color.FromArgb(105, 112, 121));
+            var hdr = "HDR";
+            var size = e.Graphics.MeasureString(hdr, titleFont);
+            e.Graphics.DrawString(hdr, titleFont, brush, (_cover.ClientSize.Width - size.Width) / 2F, Math.Max(10, (_cover.ClientSize.Height - size.Height) / 2F - 8));
+            var sub = "GAME ART";
+            var subSize = e.Graphics.MeasureString(sub, subFont);
+            e.Graphics.DrawString(sub, subFont, muted, (_cover.ClientSize.Width - subSize.Width) / 2F, Math.Max(40, (_cover.ClientSize.Height + size.Height) / 2F - 4));
+        };
+
+        var coverHost = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(1),
+            Margin = new Padding(0),
+            Radius = 7,
+            BorderThickness = 0,
+            AccentRole = "input",
+            Tag = "artwork-host"
+        };
+        coverHost.Controls.Add(_cover);
+
+        _selectedTitle.Text = "Select a game";
+        _selectedTitle.AutoEllipsis = true;
+        _selectedTitle.Dock = DockStyle.Fill;
+        _selectedTitle.TextAlign = ContentAlignment.MiddleLeft;
+        _selectedTitle.Font = new Font("Segoe UI Semibold", 17F, FontStyle.Bold);
+
+        _selectedStore.Text = "—";
+        _selectedStore.Kind = "store";
+        _selectedStore.Width = 88;
+        _selectedStore.Height = 30;
+        _selectedStore.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
+        _selectedStore.Margin = new Padding(12, 8, 0, 0);
+
+        ConfigureBadge(_nativeHdrBadge, "Unknown", "muted-badge");
+        ConfigureBadge(_hdr10Badge, "—", "muted-badge");
+
+        var titleRow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+            Tag = "modern-card-layout"
+        };
+        _selectedTitle.AutoSize = true;
+        _selectedTitle.Dock = DockStyle.None;
+        _selectedTitle.Margin = new Padding(0, 2, 12, 0);
+        _selectedStore.Margin = new Padding(0, 4, 0, 0);
+        titleRow.Controls.Add(_selectedTitle);
+        titleRow.Controls.Add(_selectedStore);
+
+        var nativeLabel = new Label
+        {
+            Text = "Native HDR",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.BottomLeft,
+            Font = new Font("Segoe UI", 9F),
+            Tag = "muted"
+        };
+        var hdr10Label = new Label
+        {
+            Text = "HDR10+ Gaming",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.BottomLeft,
+            Font = new Font("Segoe UI", 9F),
+            Tag = "muted"
+        };
+
+        _nativeHdrBadge.Width = 104;
+        _nativeHdrBadge.Height = 30;
+        _nativeHdrBadge.Margin = new Padding(0, 4, 0, 0);
+        _hdr10Badge.Width = 92;
+        _hdr10Badge.Height = 30;
+        _hdr10Badge.Margin = new Padding(0, 4, 0, 0);
+
+        var nativeStatus = new BufferedTableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Tag = "transparent-layout", BackColor = Color.Transparent, Padding = new Padding(0), Margin = new Padding(0) };
+        nativeStatus.RowStyles.Add(new RowStyle(SizeType.Absolute, 27));
+        nativeStatus.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        nativeStatus.Controls.Add(nativeLabel, 0, 0);
+        nativeStatus.Controls.Add(_nativeHdrBadge, 0, 1);
+
+        var hdr10Status = new BufferedTableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Tag = "transparent-layout", BackColor = Color.Transparent, Padding = new Padding(0), Margin = new Padding(0) };
+        hdr10Status.RowStyles.Add(new RowStyle(SizeType.Absolute, 27));
+        hdr10Status.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        hdr10Status.Controls.Add(hdr10Label, 0, 0);
+        hdr10Status.Controls.Add(_hdr10Badge, 0, 1);
+
+        var statusDivider = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Width = 1,
+            Margin = new Padding(0, 9, 20, 9),
+            Tag = "status-divider"
+        };
+
+        var statusRow = new BufferedTableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 4,
+            RowCount = 1,
+            Tag = "transparent-layout",
+            Padding = new Padding(0),
+            Margin = new Padding(0)
+        };
+        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 22));
+        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
+        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        statusRow.Controls.Add(nativeStatus, 0, 0);
+        statusRow.Controls.Add(statusDivider, 1, 0);
+        statusRow.Controls.Add(hdr10Status, 2, 0);
+
+        var selectedInfo = new BufferedTableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 2,
-            Padding = new Padding(16, 12, 16, 8),
+            Padding = new Padding(20, 2, 8, 0),
             Margin = new Padding(0),
-            Tag = "content"
+            Tag = "modern-card-layout"
         };
-        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
-        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        selectedInfo.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        selectedInfo.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
+        selectedInfo.Controls.Add(titleRow, 0, 0);
+        selectedInfo.Controls.Add(statusRow, 0, 1);
 
-        discovery.Dock = DockStyle.Fill;
-        discovery.Margin = new Padding(0, 0, 0, 6);
-        localDb.Dock = DockStyle.Fill;
-        localDb.Margin = new Padding(0, 6, 0, 0);
-        actions.Controls.Add(discovery, 0, 0);
-        actions.Controls.Add(localDb, 0, 1);
+        var hdrOptions = CreateModernButton("✳  HDR Options", "purple-outline", (_, _) => ShowHdrOptions());
+        hdrOptions.Width = 170;
+        hdrOptions.Height = 50;
+        var rulesButton = CreateModernButton("☷  Per-game Rules", "secondary", (_, _) => EditSelectedRules());
+        rulesButton.Width = 170;
+        rulesButton.Height = 50;
+
+        var selectedActions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Tag = "modern-card-layout",
+            Padding = new Padding(0),
+            Margin = new Padding(0)
+        };
+        hdrOptions.Margin = new Padding(0, 39, 14, 0);
+        rulesButton.Margin = new Padding(0, 39, 0, 0);
+        selectedActions.Controls.Add(hdrOptions);
+        selectedActions.Controls.Add(rulesButton);
+
+        ConfigureOverrideButton(_overrideHdr, "☀  Set HDR", 138);
+        ConfigureOverrideButton(_overrideSdr, "▣  Set SDR", 138);
+        _overrideAuto.Text = "Clear override";
+        _overrideAuto.Kind = "secondary";
+        _overrideAuto.Width = 112;
+        _overrideAuto.Height = 28;
+        _overrideAuto.Radius = 6;
+        _overrideAuto.Font = new Font("Segoe UI", 8.5F, FontStyle.Underline);
+        _overrideAuto.Padding = new Padding(4, 0, 4, 0);
+        _overrideAuto.Click += async (_, _) => await ApplyOverrideAsync(0);
+        _overrideHdr.Click += async (_, _) => await ApplyOverrideAsync(1);
+        _overrideSdr.Click += async (_, _) => await ApplyOverrideAsync(2);
+
+        var overrideTitle = new Label
+        {
+            Text = "HDR override",
+            AutoSize = true,
+            Font = new Font("Segoe UI", 9.5F),
+            Tag = "muted",
+            Margin = new Padding(0, 0, 0, 8)
+        };
+
+        var overrideButtons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 42,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(0),
+            Margin = new Padding(0),
+            Tag = "transparent-layout",
+            BackColor = Color.Transparent
+        };
+        _overrideHdr.Margin = new Padding(0, 0, 10, 0);
+        _overrideSdr.Margin = new Padding(0);
+        overrideButtons.Controls.Add(_overrideHdr);
+        overrideButtons.Controls.Add(_overrideSdr);
+
+        var overrideHint = new Label
+        {
+            Text = "Set how TrueAuto HDR should handle this game when it runs.",
+            AutoSize = false,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.TopLeft,
+            Font = new Font("Segoe UI", 8.5F),
+            Tag = "muted",
+            Margin = new Padding(0, 3, 0, 0)
+        };
+
+        _overrideAuto.Margin = new Padding(0, 0, 0, 0);
+
+        var overridePanel = new BufferedTableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            Padding = new Padding(18, 14, 18, 6),
+            Tag = "transparent-layout",
+            BackColor = Color.Transparent
+        };
+        overridePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        overridePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        overridePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        overridePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        overridePanel.Controls.Add(overrideTitle, 0, 0);
+        overridePanel.Controls.Add(overrideButtons, 0, 1);
+        overridePanel.Controls.Add(_overrideAuto, 0, 2);
+        overridePanel.Controls.Add(overrideHint, 0, 3);
+
+        var selectedCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(16, 14, 16, 14),
+            Margin = new Padding(18, 0, 18, 10),
+            Radius = 9,
+            AccentRole = "card",
+            Tag = "selected-card"
+        };
+        var selectedLayout = new BufferedTableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 4,
+            RowCount = 1,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+            Tag = "modern-card-layout"
+        };
+        selectedLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 122));
+        selectedLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 470));
+        selectedLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 410));
+        selectedLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        selectedLayout.Controls.Add(coverHost, 0, 0);
+        selectedLayout.Controls.Add(selectedInfo, 1, 0);
+        selectedLayout.Controls.Add(selectedActions, 2, 0);
+        selectedLayout.Controls.Add(overridePanel, 3, 0);
+        selectedCard.Controls.Add(selectedLayout);
 
         _grid.Dock = DockStyle.Fill;
         _grid.ReadOnly = true;
@@ -227,113 +524,217 @@ public sealed class GameManagerForm : Form
         _grid.RowHeadersVisible = false;
         _grid.BorderStyle = BorderStyle.None;
         _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        _grid.ColumnHeadersHeight = 38;
-        _grid.RowTemplate.Height = 34;
-        _grid.Columns.Add("status", "TrueAuto HDR");
+        _grid.ColumnHeadersHeight = 40;
+        _grid.RowTemplate.Height = 37;
+        _grid.DefaultCellStyle.Padding = new Padding(12, 0, 12, 0);
+        _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(12, 0, 12, 0);
+        _grid.Columns.Add("status", "HDR");
         _grid.Columns.Add("name", "Game");
         _grid.Columns.Add("store", "Store");
         _grid.Columns.Add("source", "HDR source");
-        _grid.Columns.Add("identity", "Identity match");
-        _grid.Columns.Add("confidence", "Confidence");
-        _grid.Columns.Add("hint", "Other source hints");
-        _grid.Columns[0].FillWeight = 34;
-        _grid.Columns[1].FillWeight = 150;
-        _grid.Columns[2].FillWeight = 42;
-        _grid.Columns[3].FillWeight = 90;
-        _grid.Columns[4].FillWeight = 90;
-        _grid.Columns[5].FillWeight = 55;
-        _grid.Columns[6].FillWeight = 115;
-        _grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) OpenPcgwForSelected(); };
+        _grid.Columns.Add("hdr10", "HDR10+ Gaming");
+        _grid.Columns.Add("hints", "Other source hints");
+        _grid.Columns[0].FillWeight = 22;
+        _grid.Columns[1].FillWeight = 96;
+        _grid.Columns[2].FillWeight = 50;
+        _grid.Columns[3].FillWeight = 94;
+        _grid.Columns[4].FillWeight = 58;
+        _grid.Columns[5].FillWeight = 78;
+        _grid.Columns[0].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        _grid.Columns[4].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        _grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) ShowHdrOptions(); };
+        _grid.SelectionChanged += async (_, _) => await UpdateSelectedCardAsync();
+        _grid.CellPainting += PaintStatusCell;
 
-        var gridHost = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 0, 16, 0), Tag = "content" };
-        gridHost.Controls.Add(_grid);
+        var gridCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(1),
+            Margin = new Padding(18, 0, 18, 8),
+            Radius = 9,
+            AccentRole = "card",
+            Tag = "selected-card"
+        };
+        gridCard.Controls.Add(_grid);
 
-        var bottom = new Panel { Dock = DockStyle.Fill, Padding = new Padding(18, 9, 18, 8), Tag = "footer" };
-        _summary.Dock = DockStyle.Top;
-        _summary.Height = 24;
-        _summary.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+        var addExe = CreateModernButton("⊕  Add EXE", "secondary", (_, _) => AddStandaloneExecutable());
+        addExe.Width = 118;
+        var import = CreateModernButton("⇩  Import", "secondary", async (_, _) => await ImportAsync());
+        import.Width = 104;
+        var export = CreateModernButton("↥  Export", "secondary", async (_, _) => await ExportAsync());
+        export.Width = 104;
+        var dbInfo = CreateModernButton("▤  Database Info", "secondary", (_, _) => ShowDatabaseInfo());
+        dbInfo.Width = 142;
+
+        var footerTools = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Tag = "modern-footer-layout",
+            Padding = new Padding(0),
+            Margin = new Padding(0)
+        };
+        foreach (var b in new[] { addExe, import, export, dbInfo })
+        {
+            b.Height = 36;
+            b.Margin = new Padding(0, 3, 10, 3);
+            footerTools.Controls.Add(b);
+        }
+
+        var footerTitle = new Label
+        {
+            Text = "DATABASE & ADVANCED",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Segoe UI Semibold", 9F),
+            Tag = "footer-heading-opaque",
+            Margin = new Padding(0)
+        };
+
+        _summary.Dock = DockStyle.Fill;
+        _summary.AutoSize = false;
+        _summary.TextAlign = ContentAlignment.MiddleLeft;
+        _summary.Tag = "muted";
+        _summary.Font = new Font("Segoe UI", 8.5F);
+        _summary.Margin = new Padding(0);
+
+        var readyBadge = new PillLabel
+        {
+            Text = "Ready",
+            Kind = "positive",
+            Width = 88,
+            Height = 28,
+            Font = new Font("Segoe UI Semibold", 8.5F),
+            Margin = new Padding(8, 5, 0, 0)
+        };
+
+        var help = CreateModernButton("?", "purple-outline", (_, _) => ShowDatabaseInfo());
+        help.Width = 42;
+        help.Height = 36;
+        help.Margin = new Padding(8, 3, 0, 3);
+
+        _scanStatus.Text = "";
         _scanStatus.Dock = DockStyle.Fill;
+        _scanStatus.TextAlign = ContentAlignment.MiddleRight;
         _scanStatus.Tag = "muted";
-        _scanStatus.Text = "PCGamingWiki HDR list + Steam can verify HDR; other sources remain available as fallback/review.";
-        _scanProgress.Dock = DockStyle.Bottom;
-        _scanProgress.Margin = new Padding(0);
-        bottom.Controls.Add(_scanStatus);
-        bottom.Controls.Add(_scanProgress);
-        bottom.Controls.Add(_summary);
+        _scanStatus.AutoEllipsis = true;
+        _scanStatus.Font = new Font("Segoe UI", 8.5F);
+        _scanStatus.Margin = new Padding(12, 0, 0, 0);
 
-        var root = new BufferedTableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, Margin = new Padding(0), Padding = new Padding(0) };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 380));
+        var footer = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(16, 5, 16, 5),
+            Margin = new Padding(18, 0, 18, 8),
+            Radius = 9,
+            AccentRole = "footer",
+            Tag = "selected-card"
+        };
+        var footerLayout = new BufferedTableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 5,
+            RowCount = 2,
+            Padding = new Padding(0),
+            Margin = new Padding(0),
+            Tag = "modern-footer-layout"
+        };
+        footerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
+        footerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 500));
+        footerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        footerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 98));
+        footerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
+        footerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        footerLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        footerLayout.Controls.Add(footerTitle, 0, 0);
+        footerLayout.Controls.Add(footerTools, 1, 0);
+        footerLayout.Controls.Add(readyBadge, 3, 0);
+        footerLayout.Controls.Add(help, 4, 0);
+
+        footerLayout.Controls.Add(_summary, 0, 1);
+        footerLayout.SetColumnSpan(_summary, 2);
+        footerLayout.Controls.Add(_scanStatus, 2, 1);
+        footerLayout.SetColumnSpan(_scanStatus, 3);
+
+        footer.Controls.Add(footerLayout);
+
+        _scanProgress.Dock = DockStyle.Bottom;
+        _scanProgress.Height = 3;
+        footer.Controls.Add(_scanProgress);
+
+        var root = new BufferedTableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 5,
+            ColumnCount = 1,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+            Tag = "content"
+        };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 122));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 184));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
         root.Controls.Add(header, 0, 0);
-        root.Controls.Add(actions, 0, 1);
-        root.Controls.Add(gridHost, 0, 2);
-        root.Controls.Add(bottom, 0, 3);
+        root.Controls.Add(discovery, 0, 1);
+        root.Controls.Add(selectedCard, 0, 2);
+        root.Controls.Add(gridCard, 0, 3);
+        root.Controls.Add(footer, 0, 4);
         Controls.Add(root);
 
-        // Theme the complete visual tree before the form is ever shown.
-        // Applying it from Shown allowed one default white WinForms frame.
         ThemeManager.Apply(this, _settings.Theme);
+        UpdateMetrics();
 
         DpiChanged += (_, e) =>
         {
             _logger.Log($"Game Manager DPI changed: {e.DeviceDpiOld} -> {e.DeviceDpiNew}. Suggested={e.SuggestedRectangle}.");
-            SuspendLayout();
-            PerformLayout();
-            ResumeLayout(true);
-            Invalidate(true);
+            SuspendLayout(); PerformLayout(); ResumeLayout(true); Invalidate(true);
         };
-
         _settings.ThemeChanged += OnThemeChanged;
         _settings.RunAtStartupChanged += OnRunAtStartupChanged;
         FormClosing += OnManagerFormClosing;
-
         FormClosed += (_, _) =>
         {
             _settings.ThemeChanged -= OnThemeChanged;
             _settings.RunAtStartupChanged -= OnRunAtStartupChanged;
+            _artworkCts?.Cancel();
+            _artwork.Dispose();
+#if CANARY
+            _hdrMods.Dispose();
+#endif
+            _cover.Image?.Dispose();
         };
+
         Shown += async (_, _) =>
         {
             _logger.Log($"Game Manager shown: DeviceDpi={DeviceDpi}, AutoScaleMode={AutoScaleMode}, ClientSize={ClientSize.Width}x{ClientSize.Height}.");
-
-            // Shown occurs after the native window exists, but the form is still
-            // completely transparent. Give WinForms one UI turn to finish child
-            // HWND creation/DPI layout/theme painting, then reveal the completed
-            // frame. This prevents default-white child-control flashes.
             ThemeManager.Apply(this, _settings.Theme);
-            PerformLayout();
-            Invalidate(true);
-
+            PerformLayout(); Invalidate(true);
             BeginInvoke(new Action(() =>
             {
                 if (IsDisposed) return;
-
                 ThemeManager.ApplyWindowChrome(this, _settings.Theme);
-                PerformLayout();
-                Invalidate(true);
-                Update();
-                Opacity = 1d;
+                PerformLayout(); Invalidate(true); Update(); Opacity = 1d;
                 _logger.Log("Game Manager first-frame reveal completed.");
             }));
 
             _scanStatus.Text = "Loading installed games…";
             _scanProgress.StartIndeterminate();
             _grid.Enabled = false;
-
             try
             {
-                var installed = await Task.Run(() => _games.GetInstalledGames().ToList());
-                _installed = installed;
+                _installed = await Task.Run(() => _games.GetInstalledGames().ToList());
                 ScanCommunityNames();
                 Populate();
-                _scanStatus.Text = "PCGamingWiki HDR list + Steam can verify HDR; other sources remain available as fallback/review.";
+                _scanStatus.Text = "";
             }
             catch (Exception ex)
             {
                 _logger.Log($"Initial installed-game load failed: {ex.Message}");
-                _scanStatus.Text = "Could not load installed games. Use Refresh Games to try again.";
+                _scanStatus.Text = "Could not load installed games. Use Scan Library to try again.";
             }
             finally
             {
@@ -341,6 +742,280 @@ public sealed class GameManagerForm : Form
                 _grid.Enabled = true;
             }
         };
+    }
+
+    private static ModernButton CreateModernButton(string text, string kind, EventHandler click)
+    {
+        var button = new ModernButton
+        {
+            Text = text,
+            Kind = kind,
+            AutoSize = false,
+            Height = 44,
+            Tag = kind == "primary" ? "primary-button" : "toolbar-button"
+        };
+        button.Click += click;
+        return button;
+    }
+
+    private static void ConfigureBadge(PillLabel label, string text, string tag)
+    {
+        label.Text = text;
+        label.AutoSize = false;
+        label.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
+        label.Tag = tag;
+        label.Kind = tag switch
+        {
+            "positive-badge" => "positive",
+            "negative-badge" => "negative",
+            "hdr10-badge" => "hdr10",
+            _ => "muted"
+        };
+    }
+
+    private void SetBadge(PillLabel label, string text, string tag)
+    {
+        label.Text = text;
+        label.Tag = tag;
+        label.Kind = tag switch
+        {
+            "positive-badge" => "positive",
+            "negative-badge" => "negative",
+            "hdr10-badge" => "hdr10",
+            _ => "muted"
+        };
+        label.Invalidate();
+    }
+
+    private async Task UpdateSelectedCardAsync()
+    {
+        var game = SelectedGame();
+        _artworkCts?.Cancel();
+        _artworkCts?.Dispose();
+        _artworkCts = new CancellationTokenSource();
+        var artworkCts = _artworkCts;
+
+        if (game is null)
+        {
+            _selectedTitle.Text = "Select a game";
+            _selectedStore.Text = "—";
+            SetBadge(_nativeHdrBadge, "Unknown", "muted-badge");
+            SetBadge(_hdr10Badge, "—", "muted-badge");
+            SetOverrideButtonsEnabled(false);
+            UpdateOverrideButtons(0);
+            _cover.Image?.Dispose(); _cover.Image = null;
+            return;
+        }
+
+        _selectedTitle.Text = game.Name;
+        _selectedStore.Text = StoreDisplay(game.Store);
+        _selectedStore.Width = Math.Clamp(TextRenderer.MeasureText(_selectedStore.Text, _selectedStore.Font).Width + 22, 78, 168);
+        var identity = _database.ResolveIdentity(game, includeMediumCandidates: true);
+        var accepted = identity?.SafeForAutomaticUse == true;
+        var entry = identity?.Entry;
+        if (accepted && entry is not null)
+            SetBadge(_nativeHdrBadge, entry.NativeHdr ? "ON" : "OFF", entry.NativeHdr ? "positive-badge" : "negative-badge");
+        else
+            SetBadge(_nativeHdrBadge, "Unknown", "muted-badge");
+
+        var hasHdr10Plus = _database.TryGetHdr10PlusGaming(game, out var hdr10Metadata);
+        if (hasHdr10Plus)
+            SetBadge(_hdr10Badge, "Supported", "hdr10-badge");
+        else
+            SetBadge(_hdr10Badge, "—", "muted-badge");
+
+        SetOverrideButtonsEnabled(true);
+        var overrideMode = _database.IsUserEntry(game)
+            ? (_database.TryGet(game, out var local) && local?.NativeHdr == true ? 1 : 2)
+            : 0;
+        UpdateOverrideButtons(overrideMode);
+
+        var old = _cover.Image;
+        _cover.Image = null;
+        old?.Dispose();
+        if (game.IsSteam)
+        {
+            var image = await _artwork.GetAsync(game, artworkCts.Token);
+            if (!artworkCts.IsCancellationRequested && !IsDisposed)
+            {
+                old = _cover.Image;
+                _cover.Image = image;
+                old?.Dispose();
+            }
+            else image?.Dispose();
+        }
+    }
+
+    private void ConfigureOverrideButton(ModernButton button, string text, int width)
+    {
+        button.Text = text;
+        button.Kind = "secondary";
+        button.Width = width;
+        button.Height = 42;
+        button.Radius = 7;
+        button.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+        button.Padding = new Padding(12, 0, 12, 0);
+    }
+
+    private void SetOverrideButtonsEnabled(bool enabled)
+    {
+        _overrideAuto.Enabled = enabled;
+        _overrideHdr.Enabled = enabled;
+        _overrideSdr.Enabled = enabled;
+    }
+
+    private void UpdateOverrideButtons(int mode)
+    {
+        _overrideAuto.Kind = "secondary";
+        _overrideHdr.Kind = mode == 1 ? "positive-outline" : "secondary";
+        _overrideSdr.Kind = mode == 2 ? "purple-outline" : "secondary";
+        _overrideAuto.Enabled = mode != 0 && _overrideHdr.Enabled;
+        _overrideAuto.Invalidate();
+        _overrideHdr.Invalidate();
+        _overrideSdr.Invalidate();
+    }
+
+    private async Task ApplyOverrideAsync(int mode)
+    {
+        var game = SelectedGame();
+        if (game is null) return;
+
+        SetOverrideButtonsEnabled(false);
+        try
+        {
+            if (mode == 0)
+            {
+                if (_database.IsUserEntry(game))
+                    await _database.RemoveUserOverrideAsync(game);
+                _logger.Log($"HDR override set to Automatic: {game.Name} [{game.Store}:{game.StoreId}].");
+            }
+            else
+            {
+                var nativeHdr = mode == 1;
+                await _database.PutForInstalledGameAsync(
+                    game,
+                    nativeHdr,
+                    "manual",
+                    nativeHdr ? "manual-true" : "manual-false");
+                _logger.Log($"HDR override changed: {game.Name} [{game.Store}:{game.StoreId}] NativeHdr={nativeHdr}.");
+            }
+
+            DatabaseChanged?.Invoke();
+            Populate();
+        }
+        catch (Exception ex)
+        {
+            _logger.Log($"Could not change HDR override: {ex}");
+            MessageBox.Show(this, ex.Message, "HDR override", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            SetOverrideButtonsEnabled(true);
+        }
+    }
+
+    private void PaintStatusCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || (e.ColumnIndex != 0 && e.ColumnIndex != 4))
+            return;
+
+        e.Paint(e.CellBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.Border | DataGridViewPaintParts.SelectionBackground);
+        e.Handled = true;
+
+        var graphics = e.Graphics;
+        if (graphics is null) return;
+
+        var value = Convert.ToString(e.FormattedValue) ?? "—";
+        var supported = value == "✓";
+        var dark = ThemeManager.ControlIsDark(_grid);
+
+        if (!supported)
+        {
+            var muted = dark ? Color.FromArgb(150, 161, 173) : Color.FromArgb(105, 115, 126);
+            TextRenderer.DrawText(
+                graphics,
+                "—",
+                _grid.Font,
+                e.CellBounds,
+                muted,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            return;
+        }
+
+        var accent = e.ColumnIndex == 4
+            ? ThemeManager.Accent("purple", dark)
+            : ThemeManager.Accent("green", dark);
+
+        var diameter = Math.Min(18, Math.Max(14, e.CellBounds.Height - 18));
+        var x = e.CellBounds.Left + (e.CellBounds.Width - diameter) / 2;
+        var y = e.CellBounds.Top + (e.CellBounds.Height - diameter) / 2;
+        var circle = new Rectangle(x, y, diameter, diameter);
+
+        using var pen = new Pen(accent, 1.8f);
+        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        graphics.DrawEllipse(pen, circle);
+
+        if (e.ColumnIndex == 0)
+        {
+            var p1 = new PointF(x + diameter * 0.28f, y + diameter * 0.53f);
+            var p2 = new PointF(x + diameter * 0.44f, y + diameter * 0.68f);
+            var p3 = new PointF(x + diameter * 0.73f, y + diameter * 0.34f);
+            using var checkPen = new Pen(accent, 1.8f)
+            {
+                StartCap = System.Drawing.Drawing2D.LineCap.Round,
+                EndCap = System.Drawing.Drawing2D.LineCap.Round,
+                LineJoin = System.Drawing.Drawing2D.LineJoin.Round
+            };
+            graphics.DrawLines(checkPen, new[] { p1, p2, p3 });
+        }
+        else
+        {
+            using var iconFont = new Font("Segoe UI Symbol", 8.5F, FontStyle.Bold);
+            TextRenderer.DrawText(
+                graphics,
+                "✳",
+                iconFont,
+                circle,
+                accent,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        }
+    }
+
+    private void ShowHdrOptions()
+    {
+        var game = SelectedGame();
+        if (game is null) return;
+        var match = _database.ResolveIdentity(game, includeMediumCandidates: true);
+        _database.TryGetHdr10PlusGaming(game, out var hdr10Metadata);
+#if CANARY
+        IReadOnlyList<HdrModMatch>? mods = _hdrMods.GetMatches(game);
+#else
+        IReadOnlyList<HdrModMatch>? mods = null;
+#endif
+        using var form = new HdrOptionsForm(game, match, hdr10Metadata, mods, _settings.Theme, _logger);
+        ThemeManager.Apply(form, _settings.Theme);
+        form.ShowDialog(this);
+    }
+
+    private void ShowDatabaseInfo()
+    {
+        MessageBox.Show(this,
+            $"Bundled entries: {_database.BundledCount}\nUser overrides: {_database.UserCount}\nMerged entries: {_database.Count}\n\nUser database:\n{_database.UserDatabasePath}\n\nBundled database:\n{_database.BundledDatabasePath ?? "(embedded/default)"}",
+            "TrueAuto HDR — Database Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private void UpdateMetrics()
+    {
+        var hdr = 0;
+        var hdr10 = 0;
+        foreach (var game in _installed)
+        {
+            var match = _database.ResolveIdentity(game, includeMediumCandidates: false);
+            if (match?.Entry.NativeHdr == true) hdr++;
+            if (_database.TryGetHdr10PlusGaming(game, out _)) hdr10++;
+        }
+        var scan = _lastScanUtc.HasValue ? _lastScanUtc.Value.ToLocalTime().ToString("HH:mm") : "—";
+        _metrics.SetValues(scan, _installed.Count, hdr, hdr10);
     }
 
     private void OnManagerFormClosing(object? sender, FormClosingEventArgs e)
@@ -432,6 +1107,11 @@ public sealed class GameManagerForm : Form
             ScanCommunityNames();
             Populate();
             DatabaseChanged?.Invoke();
+            var extraSourceSummary = "";
+#if CANARY
+            var modRefresh = await _hdrMods.RefreshAsync();
+            extraSourceSummary = $"\n\nCanary HDR mods: {modRefresh.Message}";
+#endif
             _scanStatus.Text =
                 $"Sources update complete: PCGamingWiki added {result.PcgwAdded}; " +
                 (result.Database.Updated
@@ -440,7 +1120,7 @@ public sealed class GameManagerForm : Form
 
             MessageBox.Show(
                 this,
-                result.Summary,
+                result.Summary + extraSourceSummary,
                 "TrueAuto HDR — HDR sources update",
                 MessageBoxButtons.OK,
                 result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
@@ -708,7 +1388,8 @@ public sealed class GameManagerForm : Form
         _scanStatus.Text = form.Result.EnableDelayMs == 0 &&
                            form.Result.ExitGraceMs == 0 &&
                            !form.Result.KeepHdrAfterExit &&
-                           string.IsNullOrWhiteSpace(form.Result.DisplayDeviceName)
+                           string.IsNullOrWhiteSpace(form.Result.DisplayDeviceName) &&
+                           form.Result.DisplayRecovery == DisplayRecoveryMode.Off
             ? $"{game.Name}: using default HDR behavior."
             : $"{game.Name}: per-game rules saved.";
     }
@@ -826,42 +1507,48 @@ public sealed class GameManagerForm : Form
             var accepted = identity?.SafeForAutomaticUse == true;
             var entry = accepted ? identity!.Entry : null;
             var enabled = entry?.NativeHdr == true;
-
-            var source = entry is null
-                ? ""
-                : identity!.IsUserEntry ? $"User ({entry.Source})" : entry.Source;
-
-            var identityText = identity is null ? "" : $"{identity.MatchType}: {identity.MatchedName}";
-            var confidence = identity?.ConfidenceLabel ?? "";
+            var source = entry is null ? "—" : identity!.IsUserEntry ? $"User · {entry.Source}" : entry.Source;
+            var hdr10Supported = _database.TryGetHdr10PlusGaming(game, out var hdr10Metadata);
+            var hdr10Text = hdr10Supported ? "✓" : "—";
 
             _sourceHints.TryGetValue(game.Key, out var hint);
-
             if (!accepted && identity is not null)
             {
                 var dbHint = $"DB candidate: {identity.MatchedName} ({identity.ConfidenceLabel}, {identity.MatchType}, {identity.Score}%)";
                 hint = string.IsNullOrWhiteSpace(hint) ? dbHint : $"{hint} | {dbHint}";
             }
 
-            var status = enabled ? "ON" : accepted ? "OFF" : (identity?.Entry.NativeHdr == true || !string.IsNullOrWhiteSpace(hint)) ? "Candidate" : "Unknown";
-            var index = _grid.Rows.Add(status, game.Name, game.Store, source, identityText, confidence, hint ?? "");
+            var status = enabled ? "✓" : "—";
+            var index = _grid.Rows.Add(status, game.Name, StoreDisplay(game.Store), source, hdr10Text, hint ?? "—");
             _grid.Rows[index].Tag = game;
+            var dark = ThemeManager.ControlIsDark(_grid);
+            _grid.Rows[index].Cells[0].Style.ForeColor = enabled
+                ? ThemeManager.Accent("green", dark)
+                : (dark ? Color.FromArgb(154, 165, 177) : Color.FromArgb(100, 110, 122));
+            if (hdr10Supported)
+            {
+                _grid.Rows[index].Cells[4].Style.ForeColor = ThemeManager.Accent("purple", dark);
+            }
+            _grid.Rows[index].Cells[0].ToolTipText = accepted
+                ? $"Native HDR: {(enabled ? "supported" : "disabled/SDR")}. {source}"
+                : hint ?? "No verified HDR identity yet.";
+            _grid.Rows[index].Cells[3].ToolTipText = identity is null
+                ? hint ?? ""
+                : $"{identity.MatchType}: {identity.MatchedName} · {identity.ConfidenceLabel} · {identity.Score}%";
+            if (hdr10Supported)
+                _grid.Rows[index].Cells[4].ToolTipText = string.IsNullOrWhiteSpace(hdr10Metadata?.Hdr10PlusSource) ? "HDR10+ Gaming supported" : hdr10Metadata!.Hdr10PlusSource;
+            _grid.Rows[index].Cells[5].ToolTipText = hint ?? "";
 
             if (game.Key == selectedId) _grid.Rows[index].Selected = true;
         }
 
-        var installedHdr = _installed.Count(g =>
-        {
-            var m = _database.ResolveIdentity(g, includeMediumCandidates: false);
-            return m?.Entry.NativeHdr == true;
-        });
-        var candidates = _installed.Count(g =>
-        {
-            var m = _database.ResolveIdentity(g, includeMediumCandidates: true);
-            return (m is not null && !m.SafeForAutomaticUse && m.Entry.NativeHdr) ||
-                   (!_database.TryGet(g, out _) && _sourceHints.ContainsKey(g.Key));
-        });
+        var installedHdr = _installed.Count(g => _database.ResolveIdentity(g, includeMediumCandidates: false)?.Entry.NativeHdr == true);
+        var hdr10 = _installed.Count(g => _database.TryGetHdr10PlusGaming(g, out _));
+        _summary.Text = $"Installed: {_installed.Count}   •   HDR enabled: {installedHdr}   •   HDR10+: {hdr10}   •   DB: {_database.Count}";
+        UpdateMetrics();
 
-        _summary.Text = $"Installed: {_installed.Count}   •   HDR enabled: {installedHdr}   •   Candidates: {candidates}   •   DB: {_database.BundledCount}   •   User: {_database.UserCount}";
+        if (_grid.Rows.Count > 0 && _grid.SelectedRows.Count == 0)
+            _grid.Rows[0].Selected = true;
     }
 
     private async Task VerifySelectedAsync()
@@ -1119,6 +1806,18 @@ public sealed class GameManagerForm : Form
     {
         var game = SelectedGame(); if (game is null) return;
         OpenUrl($"https://www.pcgamingwiki.com/w/index.php?search={Uri.EscapeDataString(game.Name)}");
+    }
+
+    private static string StoreDisplay(string store)
+    {
+        if (store.Equals("Steam", StringComparison.OrdinalIgnoreCase)) return "●  Steam";
+        if (store.Equals("Xbox", StringComparison.OrdinalIgnoreCase)) return "◉  Xbox";
+        if (store.Contains("Microsoft", StringComparison.OrdinalIgnoreCase)) return "▣  Microsoft Store";
+        if (store.Equals("Epic", StringComparison.OrdinalIgnoreCase)) return "◆  Epic";
+        if (store.Equals("Ubisoft", StringComparison.OrdinalIgnoreCase)) return "◌  Ubisoft";
+        if (store.Equals("EA", StringComparison.OrdinalIgnoreCase)) return "EA";
+        if (store.Equals("GOG", StringComparison.OrdinalIgnoreCase)) return "GOG";
+        return store;
     }
 
     private void OpenUrl(string url)

@@ -9,6 +9,7 @@ public sealed class GameRuleForm : Form
     private readonly NumericUpDown _exitGrace = new();
     private readonly CheckBox _keepHdr = new();
     private readonly ComboBox _display = new();
+    private readonly ComboBox _displayRecovery = new();
 
     public GameRule Result { get; private set; }
 
@@ -18,8 +19,8 @@ public sealed class GameRuleForm : Form
         Text = $"Rules — {game.Name}";
         Icon = AppIcon.Create();
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(510, 310);
-        MinimumSize = MaximumSize = new Size(526, 349);
+        ClientSize = new Size(540, 360);
+        MinimumSize = MaximumSize = new Size(556, 399);
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 9F);
 
@@ -34,6 +35,16 @@ public sealed class GameRuleForm : Form
         _keepHdr.Text = "Keep HDR enabled after this game exits";
         _keepHdr.Checked = current.KeepHdrAfterExit;
         _keepHdr.AutoSize = true;
+
+        _displayRecovery.DropDownStyle = ComboBoxStyle.DropDownList;
+        _displayRecovery.Dock = DockStyle.Fill;
+        _displayRecovery.Items.AddRange(new object[]
+        {
+            "Off",
+            "Re-apply current display mode",
+            "Force refresh-rate reset"
+        });
+        _displayRecovery.SelectedIndex = Math.Clamp((int)current.DisplayRecovery, 0, 2);
 
         _display.DropDownStyle = ComboBoxStyle.DropDownList;
         _display.Dock = DockStyle.Fill;
@@ -65,18 +76,20 @@ public sealed class GameRuleForm : Form
                 KeepHdrAfterExit = _keepHdr.Checked,
                 DisplayDeviceName = _display.SelectedIndex <= 0
                     ? ""
-                    : _display.SelectedItem?.ToString()?.Split(' ')[0] ?? ""
+                    : _display.SelectedItem?.ToString()?.Split(' ')[0] ?? "",
+                DisplayRecovery = (DisplayRecoveryMode)Math.Clamp(_displayRecovery.SelectedIndex, 0, 2)
             };
         };
 
         var grid = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 7,
+            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 8,
             Padding = new Padding(18), Tag = "content"
         };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
@@ -92,18 +105,20 @@ public sealed class GameRuleForm : Form
         grid.Controls.Add(_exitGrace, 1, 2);
         grid.Controls.Add(new Label { Text = "HDR display", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 3);
         grid.Controls.Add(_display, 1, 3);
-        grid.Controls.Add(_keepHdr, 0, 4); grid.SetColumnSpan(_keepHdr, 2);
+        grid.Controls.Add(new Label { Text = "Display recovery", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 4);
+        grid.Controls.Add(_displayRecovery, 1, 4);
+        grid.Controls.Add(_keepHdr, 0, 5); grid.SetColumnSpan(_keepHdr, 2);
 
         var hint = new Label
         {
-            Text = "Delays are event-driven Tasks; they do not add an idle polling loop or background timer.",
+            Text = "Display recovery runs only after this game exits. Delays are event-driven Tasks; no additional idle polling or background timer is added.",
             AutoSize = true, MaximumSize = new Size(455, 0), Tag = "muted"
         };
-        grid.Controls.Add(hint, 0, 5); grid.SetColumnSpan(hint, 2);
+        grid.Controls.Add(hint, 0, 6); grid.SetColumnSpan(hint, 2);
 
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Tag = "content" };
         buttons.Controls.Add(save); buttons.Controls.Add(cancel);
-        grid.Controls.Add(buttons, 0, 6); grid.SetColumnSpan(buttons, 2);
+        grid.Controls.Add(buttons, 0, 7); grid.SetColumnSpan(buttons, 2);
         Controls.Add(grid);
 
         AcceptButton = save; CancelButton = cancel;

@@ -8,6 +8,11 @@ public sealed class HdrGame
     public string StoreId { get; set; } = "";
     public string Name { get; set; } = "";
     public bool NativeHdr { get; set; }
+    // HDR10+ Gaming is capability metadata only. It never enables Display Recovery by itself.
+    public bool Hdr10PlusGaming { get; set; }
+    public string Hdr10PlusSource { get; set; } = "";
+    // Capability-only records can carry HDR10+ metadata without becoming a Native HDR decision.
+    public bool CapabilityOnly { get; set; }
     public string RawPcgwHdrValue { get; set; } = "";
     public DateTime CheckedUtc { get; set; }
     public string Source { get; set; } = "manual";

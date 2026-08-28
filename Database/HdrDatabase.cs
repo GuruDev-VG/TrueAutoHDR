@@ -99,9 +99,27 @@ public sealed class HdrDatabase
             }
         }
 
+        // Conservative non-identity suffix inheritance. This covers storefront
+        // variants such as "Crimson Desert Enhanced" and public beta labels
+        // without turning broad fuzzy title matching into an automatic decision.
+        var safeVariant = GameIdentityMatcher.CanonicalizeSafeVariant(installed.Name);
+        if (safeVariant.Length >= 4)
+        {
+            foreach (var pair in EnumerateEntries(userFirst: true))
+            {
+                foreach (var name in GameIdentityMatcher.Names(pair.Game))
+                {
+                    if (GameIdentityMatcher.CanonicalizeSafeVariant(name) == safeVariant &&
+                        GameIdentityMatcher.Normalize(name) != installedNormalized)
+                        return new GameIdentityMatch(pair.Game, IdentityConfidence.High, 92,
+                            "Known title variant", name, pair.IsUser);
+                }
+            }
+        }
+
         if (!includeMediumCandidates) return null;
 
-        // 3) Edition/storefront-noise-stripped title. Keep this review-only.
+        // 3) Broader edition/storefront-noise-stripped title. Keep this review-only.
         var canonical = GameIdentityMatcher.Canonicalize(installed.Name);
         foreach (var pair in EnumerateEntries(userFirst: true))
         {
@@ -134,14 +152,61 @@ public sealed class HdrDatabase
     {
         if (userFirst)
         {
-            foreach (var g in _user.Values) yield return (g, true);
-            foreach (var g in _bundled.Values) yield return (g, false);
+            foreach (var g in _user.Values) if (!g.CapabilityOnly) yield return (g, true);
+            foreach (var g in _bundled.Values) if (!g.CapabilityOnly) yield return (g, false);
         }
         else
         {
-            foreach (var g in _bundled.Values) yield return (g, false);
-            foreach (var g in _user.Values) yield return (g, true);
+            foreach (var g in _bundled.Values) if (!g.CapabilityOnly) yield return (g, false);
+            foreach (var g in _user.Values) if (!g.CapabilityOnly) yield return (g, true);
         }
+    }
+
+    public bool TryGetHdr10PlusGaming(InstalledGame installed, out HdrGame? metadata)
+    {
+        metadata = null;
+        IEnumerable<HdrGame> entries = _bundled.Values.Concat(_user.Values).Where(g => g.Hdr10PlusGaming);
+
+        var composite = CompositeKey(installed.Store, installed.StoreId);
+        if (_bundled.TryGetValue(composite, out var exact) && exact.Hdr10PlusGaming) { metadata = exact; return true; }
+        if (installed.IsSteam && _bundled.TryGetValue(installed.StoreId, out var steam) && steam.Hdr10PlusGaming) { metadata = steam; return true; }
+
+        foreach (var game in entries)
+        {
+            if (game.StoreIds is not null && game.StoreIds.TryGetValue(installed.Store, out var storeId) &&
+                string.Equals(storeId, installed.StoreId, StringComparison.OrdinalIgnoreCase))
+            {
+                metadata = game; return true;
+            }
+        }
+
+        var normalized = GameIdentityMatcher.Normalize(installed.Name);
+        foreach (var game in entries)
+        {
+            foreach (var name in GameIdentityMatcher.Names(game))
+            {
+                if (GameIdentityMatcher.Normalize(name) == normalized)
+                {
+                    metadata = game; return true;
+                }
+            }
+        }
+
+        var variant = GameIdentityMatcher.CanonicalizeSafeVariant(installed.Name);
+        if (variant.Length >= 4)
+        {
+            foreach (var game in entries)
+            {
+                foreach (var name in GameIdentityMatcher.Names(game))
+                {
+                    if (GameIdentityMatcher.CanonicalizeSafeVariant(name) == variant)
+                    {
+                        metadata = game; return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     public bool IsUserEntry(InstalledGame game)

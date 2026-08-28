@@ -1,4 +1,13 @@
-# Changelog
+﻿# Changelog
+
+## 1.5.0 — HDR10+ Gaming, display recovery, and Game Manager redesign
+
+- Added HDR10+ Gaming capability metadata and conservative title-variant inheritance.
+- Added per-game display recovery modes for stale HDR/color-pipeline recovery after game exit.
+- Redesigned Game Manager around a compact discovery toolbar and selected-game card.
+- Added on-demand Steam artwork with local-cache-first behavior.
+- Added isolated Stable and Canary update package builders.
+- Preserved low-idle-overhead design: no new polling loops or continuous network activity.
 
 ## 1.3.2 — Window close behavior
 

@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 cd /d "%~dp0"
 if not exist "Data" mkdir "Data"
 if not exist "Data\trueautohdr.log" (

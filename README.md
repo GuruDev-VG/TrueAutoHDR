@@ -1,4 +1,4 @@
-# TrueAuto HDR
+﻿# TrueAuto HDR
 
 **Automatically enable Windows HDR when a native-HDR game starts, and turn it back off when the game closes.**
 
@@ -27,6 +27,10 @@ PCGamingWiki entries tagged **Native support**, **Limited native support**, or *
 - Steam and additional storefront/game detection
 - PCGamingWiki HDR-list verification
 - Local HDR database and manual game management
+- HDR10+ Gaming capability metadata kept separate from display-recovery behavior
+- Per-game display recovery for titles that leave the Windows color pipeline in a bad state after exit
+- Redesigned Game Manager with selected-game status card and compact controls
+- On-demand Steam game artwork with local-cache-first behavior
 - Candidate review for uncertain matches
 - Portable and installable builds
 - Run at Windows startup / minimized startup mode
@@ -66,6 +70,15 @@ For the complete release:
 ```bat
 BuildRelease.bat
 ```
+
+For application update packages, Stable and Canary are isolated:
+
+```bat
+BuildStableUpdate.bat
+BuildCanaryUpdate.bat
+```
+
+Stable writes only under `UpdatePackages\Stable` and Canary writes only under `UpdatePackages\Canary`.
 
 The release pipeline builds the updater and application, optionally Authenticode-signs release executables when signing is configured, verifies required payload files, runs the built-in `--self-test`, packages Portable/Installer builds, and generates `release/SHA256SUMS.txt`.
 

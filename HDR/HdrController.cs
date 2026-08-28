@@ -34,6 +34,25 @@ public sealed class HdrController
         return new HdrAggregateState(state.Value.Enabled, 1);
     }
 
+    public void RecoverDisplayMode(string? deviceName, bool forceRefreshRateReset)
+    {
+        var requested = string.IsNullOrWhiteSpace(deviceName)
+            ? System.Windows.Forms.Screen.PrimaryScreen?.DeviceName
+            : deviceName;
+        if (string.IsNullOrWhiteSpace(requested))
+        {
+            _logger.Log("Display recovery skipped: no display device was resolved.");
+            return;
+        }
+
+        if (!DisplayModeNative.TryReapplyCurrentMode(requested, forceRefreshRateReset, out var detail))
+        {
+            _logger.Log($"Display recovery failed for {requested}: {detail}");
+            return;
+        }
+        _logger.Log($"Display recovery completed for {requested}: {detail}");
+    }
+
     public void SetHdrOnAllSupportedTargets(bool enabled) => SetHdrForDisplay(enabled, null);
 
     public void SetHdrForDisplay(bool enabled, string? deviceName)
@@ -326,4 +345,89 @@ internal static class DisplayConfigNative
         var result = DisplayConfigSetDeviceInfo(ref packet);
         if (result != ERROR_SUCCESS) throw new Win32Exception(result);
     }
+}
+
+
+internal static class DisplayModeNative
+{
+    private const int ENUM_CURRENT_SETTINGS = -1;
+    private const int ENUM_REGISTRY_SETTINGS = -2;
+    private const int CDS_FULLSCREEN = 0x00000004;
+    private const int DISP_CHANGE_SUCCESSFUL = 0;
+    private const int DM_PELSWIDTH = 0x00080000;
+    private const int DM_PELSHEIGHT = 0x00100000;
+    private const int DM_DISPLAYFREQUENCY = 0x00400000;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DEVMODE
+    {
+        private const int CCHDEVICENAME = 32;
+        private const int CCHFORMNAME = 32;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = CCHDEVICENAME)] public string dmDeviceName;
+        public ushort dmSpecVersion; public ushort dmDriverVersion; public ushort dmSize; public ushort dmDriverExtra;
+        public uint dmFields; public int dmPositionX; public int dmPositionY; public uint dmDisplayOrientation; public uint dmDisplayFixedOutput;
+        public short dmColor; public short dmDuplex; public short dmYResolution; public short dmTTOption; public short dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = CCHFORMNAME)] public string dmFormName;
+        public ushort dmLogPixels; public uint dmBitsPerPel; public uint dmPelsWidth; public uint dmPelsHeight;
+        public uint dmDisplayFlags; public uint dmDisplayFrequency; public uint dmICMMethod; public uint dmICMIntent;
+        public uint dmMediaType; public uint dmDitherType; public uint dmReserved1; public uint dmReserved2; public uint dmPanningWidth; public uint dmPanningHeight;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool EnumDisplaySettings(string lpszDeviceName, int iModeNum, ref DEVMODE lpDevMode);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int ChangeDisplaySettingsEx(string lpszDeviceName, ref DEVMODE lpDevMode, IntPtr hwnd, uint dwflags, IntPtr lParam);
+
+    internal static bool TryReapplyCurrentMode(string deviceName, bool forceRefreshRateReset, out string detail)
+    {
+        var current = NewDevMode();
+        if (!EnumDisplaySettings(deviceName, ENUM_CURRENT_SETTINGS, ref current))
+        {
+            detail = "EnumDisplaySettings(current) failed.";
+            return false;
+        }
+
+        if (forceRefreshRateReset)
+        {
+            DEVMODE? alternate = null;
+            for (var i = 0; ; i++)
+            {
+                var mode = NewDevMode();
+                if (!EnumDisplaySettings(deviceName, i, ref mode)) break;
+                if (mode.dmPelsWidth == current.dmPelsWidth && mode.dmPelsHeight == current.dmPelsHeight &&
+                    mode.dmDisplayFrequency > 0 && mode.dmDisplayFrequency != current.dmDisplayFrequency)
+                {
+                    alternate = mode;
+                    break;
+                }
+            }
+
+            if (alternate.HasValue)
+            {
+                var alt = alternate.Value;
+                alt.dmFields |= DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY;
+                var first = ChangeDisplaySettingsEx(deviceName, ref alt, IntPtr.Zero, CDS_FULLSCREEN, IntPtr.Zero);
+                if (first != DISP_CHANGE_SUCCESSFUL)
+                {
+                    detail = $"temporary refresh-rate switch failed ({first}).";
+                    return false;
+                }
+            }
+        }
+
+        current.dmFields |= DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY;
+        var result = ChangeDisplaySettingsEx(deviceName, ref current, IntPtr.Zero, CDS_FULLSCREEN, IntPtr.Zero);
+        detail = result == DISP_CHANGE_SUCCESSFUL
+            ? $"re-applied {current.dmPelsWidth}x{current.dmPelsHeight} @ {current.dmDisplayFrequency} Hz"
+            : $"ChangeDisplaySettingsEx returned {result}";
+        return result == DISP_CHANGE_SUCCESSFUL;
+    }
+
+    private static DEVMODE NewDevMode() => new()
+    {
+        dmDeviceName = string.Empty,
+        dmFormName = string.Empty,
+        dmSize = (ushort)Marshal.SizeOf<DEVMODE>()
+    };
 }

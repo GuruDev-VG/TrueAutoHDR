@@ -204,6 +204,13 @@ public sealed class GameProcessWatcher : IDisposable
                 }
 
                 _hdrStateBeforeByDisplay.Remove(displayKey);
+
+                if (rule.DisplayRecovery != DisplayRecoveryMode.Off)
+                {
+                    var force = rule.DisplayRecovery == DisplayRecoveryMode.ForceRefreshRateReset;
+                    _logger.Log($"{game.Name}: running display recovery ({rule.DisplayRecovery}) on {displayKey}.");
+                    _hdr.RecoverDisplayMode(displayName, force);
+                }
             }
 
             if (_activeHdrGames.Count == 0)

@@ -1,4 +1,4 @@
-param(
+﻿param(
   [Parameter(Mandatory=$true)][string]$Version,
   [Parameter(Mandatory=$true)][string]$PublishFolder,
   [Parameter(Mandatory=$true)][string]$PackageUrl,
