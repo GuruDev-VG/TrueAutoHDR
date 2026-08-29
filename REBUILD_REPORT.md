@@ -1,6 +1,5 @@
 # TrueAuto HDR 1.4.0 reconstruction report
 
-Baseline: `TrueAutoHDR-v1.3.2-tidy-close-dialog-source.zip` from the current ChatGPT session.
 
 ## Reconstructed / added
 

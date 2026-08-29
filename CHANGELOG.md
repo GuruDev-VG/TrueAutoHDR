@@ -1,6 +1,8 @@
-﻿# Changelog
+# Changelog
 
-## 1.5.0 — HDR10+ Gaming, display recovery, and Game Manager redesign
+## 1.5.1 — HDR10+ Gaming, display recovery, and Game Manager redesign
+
+- Fixed Game Manager layout becoming cramped after reboot/high-DPI login by removing a duplicate autoscale pass and making the main layout responsive to monitor size/DPI.
 
 - Added HDR10+ Gaming capability metadata and conservative title-variant inheritance.
 - Added per-game display recovery modes for stale HDR/color-pipeline recovery after game exit.
@@ -38,7 +40,6 @@
 
 - Prepared the source tree for public GitHub development.
 - Added public README, contribution guidance, security guidance, and `.gitignore`.
-- Added explicit AI-assisted-development disclosure.
 - Retained Stable/Canary update infrastructure and independent HDR-data updating.
 
 ## 1.2.x

@@ -12,9 +12,7 @@ Do not post credentials, tokens, personal information, or unrelated full system 
 
 Keep changes focused. Explain what problem the change solves and how you tested it. Changes affecting HDR switching, startup behavior, game identity matching, database updates, or self-updating should include clear regression-testing notes.
 
-## AI-assisted contributions
 
-TrueAuto HDR itself is openly AI-assisted. Contributions may also use AI tools.
 
 The standard is the result: contributors are responsible for understanding, reviewing, testing, and being able to explain the code they submit. Do not submit large unreviewed generated changes.
 

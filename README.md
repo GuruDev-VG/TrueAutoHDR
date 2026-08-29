@@ -1,4 +1,4 @@
-﻿# TrueAuto HDR
+# TrueAuto HDR
 
 **Automatically enable Windows HDR when a native-HDR game starts, and turn it back off when the game closes.**
 
@@ -84,6 +84,12 @@ The release pipeline builds the updater and application, optionally Authenticode
 
 See [SIGNING.md](SIGNING.md) for the optional signing setup.
 
+
+
+
+
+Constructive bug reports, technical criticism, testing, and contributions are welcome. Arguments whose only purpose is objecting to the use of AI are not useful to the project.
+
 ## PCGamingWiki
 
 TrueAuto HDR can consult PCGamingWiki's community-maintained HDR information to help determine whether an installed game supports native HDR.
@@ -136,5 +142,10 @@ TrueAuto HDR is free and open-source software licensed under the **GNU General P
 You may use, study, modify, and redistribute the project under the terms of the GPL. If you distribute a modified/derivative version covered by the GPL, the corresponding source code must remain available under compatible GPL terms.
 
 See [LICENSE](LICENSE) for the full license text.
+
+## Credits
+
+Developed by **VG Prod.**
+
 
 Game HDR compatibility information may be sourced from **PCGamingWiki** and other supported metadata/community sources.
