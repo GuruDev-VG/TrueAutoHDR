@@ -84,16 +84,6 @@ The release pipeline builds the updater and application, optionally Authenticode
 
 See [SIGNING.md](SIGNING.md) for the optional signing setup.
 
-## AI-assisted development
-
-**TrueAuto HDR is an AI-assisted software project.**
-
-The project was created and developed by **VG Prod. with extensive assistance from OpenAI's ChatGPT**, including code generation, debugging, refactoring, UI iteration, architecture discussions, and documentation.
-
-AI-generated or AI-assisted code is reviewed and tested as part of development, but—as with any software—bugs are possible. This disclosure is intentional. If you prefer not to use software developed with generative-AI assistance, this project may not be for you.
-
-Constructive bug reports, technical criticism, testing, and contributions are welcome. Arguments whose only purpose is objecting to the use of AI are not useful to the project.
-
 ## PCGamingWiki
 
 TrueAuto HDR can consult PCGamingWiki's community-maintained HDR information to help determine whether an installed game supports native HDR.
@@ -146,11 +136,5 @@ TrueAuto HDR is free and open-source software licensed under the **GNU General P
 You may use, study, modify, and redistribute the project under the terms of the GPL. If you distribute a modified/derivative version covered by the GPL, the corresponding source code must remain available under compatible GPL terms.
 
 See [LICENSE](LICENSE) for the full license text.
-
-## Credits
-
-Developed by **VG Prod.**
-
-Created with extensive development assistance from **OpenAI ChatGPT**.
 
 Game HDR compatibility information may be sourced from **PCGamingWiki** and other supported metadata/community sources.
